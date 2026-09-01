@@ -1,0 +1,61 @@
+{
+  "housing": {
+    "purchase_price": 1200000.0,
+    "down_payment": 250000.0,
+    "monthly_rent": 4500.0,
+    "property_tax_rate": 0.0124,
+    "insurance_rate": 0.0035,
+    "maintenance_rate": 0.01,
+    "annual_hoa": 0.0,
+    "purchase_closing_cost_rate": 0.025,
+    "sale_cost_rate": 0.055
+  },
+  "mortgage": {
+    "initial_rate": 0.0666,
+    "term_years": 30,
+    "long_run_rate": 0.055,
+    "rate_mean_reversion": 0.25,
+    "annual_rate_volatility": 0.0075,
+    "rate_floor": 0.025,
+    "rate_cap": 0.12,
+    "refinance_enabled": true,
+    "refinance_threshold": 0.01,
+    "refinance_cost_rate": 0.015,
+    "refinance_fixed_cost": 2500.0,
+    "refinance_term_years": 30,
+    "minimum_refinance_balance": 100000.0
+  },
+  "market": {
+    "stock_return": 0.07,
+    "stock_volatility": 0.18,
+    "home_appreciation": 0.035,
+    "home_volatility": 0.07,
+    "rent_growth": 0.03,
+    "rent_volatility": 0.03,
+    "general_inflation": 0.025,
+    "correlation": [
+      [1.0, 0.25, 0.15, 0.1],
+      [0.25, 1.0, 0.45, -0.15],
+      [0.15, 0.45, 1.0, 0.1],
+      [0.1, -0.15, 0.1, 1.0]
+    ]
+  },
+  "regimes": {
+    "names": ["normal", "recession", "crash"],
+    "transition": [
+      [0.915, 0.065, 0.02],
+      [0.55, 0.38, 0.07],
+      [0.5, 0.35, 0.15]
+    ],
+    "stock_return_shifts": [0.0, -0.15, -0.42],
+    "home_return_shifts": [0.0, -0.07, -0.18],
+    "rent_growth_shifts": [0.0, -0.015, -0.04],
+    "mortgage_rate_shifts": [0.0, -0.006, -0.015],
+    "volatility_multipliers": [1.0, 1.25, 1.6]
+  },
+  "runs": 100000,
+  "years": 20,
+  "horizons": [5, 10, 20],
+  "seed": 42
+}
+

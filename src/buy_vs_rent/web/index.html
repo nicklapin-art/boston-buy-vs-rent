@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Interactive Boston buy-versus-rent Monte Carlo simulator">
+  <title>Boston Buy vs. Rent Lab</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f5f2eb;
+      --surface: #fffdf9;
+      --surface-alt: #ece8df;
+      --text: #252722;
+      --muted: #676b63;
+      --border: #d8d2c6;
+      --accent: #1f5265;
+      --accent-strong: #143b4a;
+      --accent-soft: #d9e8ec;
+      --buy: #287b61;
+      --buy-soft: #dcece5;
+      --rent: #cc7a29;
+      --rent-soft: #f4e5d6;
+      --danger: #a33a34;
+      --shadow: 0 12px 30px rgba(42, 40, 34, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+    button, input, select { font: inherit; }
+    button, summary, select, input[type="checkbox"] { cursor: pointer; }
+    .shell { width: min(1380px, calc(100% - 32px)); margin: 0 auto; padding: 30px 0 54px; }
+    .masthead { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 24px; }
+    .eyebrow {
+      margin: 0 0 5px;
+      color: var(--accent);
+      font-size: 0.76rem;
+      font-weight: 750;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+    }
+    h1 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: clamp(2rem, 4vw, 3.4rem); line-height: 1; font-weight: 500; }
+    .subtitle { max-width: 660px; margin: 10px 0 0; color: var(--muted); }
+    .source-note { max-width: 310px; margin: 0; color: var(--muted); font-size: 0.82rem; text-align: right; }
+    .workspace { display: grid; grid-template-columns: 350px minmax(0, 1fr); gap: 20px; align-items: start; }
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: var(--shadow);
+    }
+    .controls { position: sticky; top: 16px; padding: 20px; }
+    .controls h2, .results h2, .chart-block h3 { margin: 0; }
+    .controls h2 { font-size: 1.06rem; }
+    .controls-intro { margin: 4px 0 18px; color: var(--muted); font-size: 0.85rem; }
+    fieldset { margin: 0 0 18px; padding: 0; border: 0; }
+    legend { width: 100%; margin-bottom: 10px; padding-bottom: 7px; border-bottom: 1px solid var(--border); font-size: 0.78rem; font-weight: 750; letter-spacing: 0.08em; text-transform: uppercase; }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .field { min-width: 0; }
+    .field.wide { grid-column: 1 / -1; }
+    label { display: block; margin-bottom: 4px; color: var(--muted); font-size: 0.76rem; font-weight: 650; }
+    input[type="number"], select {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: var(--surface);
+      color: var(--text);
+      padding: 8px 10px;
+      font-variant-numeric: tabular-nums;
+    }
+    input:focus, select:focus, button:focus-visible, summary:focus-visible { outline: 3px solid var(--accent-soft); outline-offset: 1px; }
+    details { margin: 0 0 18px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    summary { padding: 12px 0; color: var(--accent); font-size: 0.84rem; font-weight: 700; }
+    details .field-grid { padding: 2px 0 14px; }
+    .check-row { display: flex; align-items: center; gap: 8px; grid-column: 1 / -1; padding: 4px 0; }
+    .check-row label { margin: 0; color: var(--text); }
+    .actions { display: grid; grid-template-columns: 1fr auto; gap: 9px; }
+    .primary, .secondary {
+      min-height: 44px;
+      border-radius: 10px;
+      padding: 9px 14px;
+      font-weight: 750;
+    }
+    .primary { border: 1px solid var(--accent); background: var(--accent); color: white; }
+    .primary:hover { background: var(--accent-strong); }
+    .primary:disabled { cursor: wait; opacity: 0.65; }
+    .secondary { border: 1px solid var(--border); background: transparent; color: var(--text); }
+    .results { min-height: 690px; padding: 24px; }
+    .results-header { display: flex; align-items: start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+    .results-header h2 { font-family: Georgia, "Times New Roman", serif; font-size: 1.7rem; font-weight: 500; }
+    .run-meta { color: var(--muted); font-size: 0.78rem; white-space: nowrap; }
+    .status { min-height: 22px; margin: 0 0 12px; color: var(--muted); font-size: 0.84rem; }
+    .status.error { color: var(--danger); }
+    .verdict {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 13px;
+      align-items: center;
+      margin-bottom: 22px;
+      padding: 16px;
+      border-radius: 12px;
+      background: var(--accent-soft);
+    }
+    .verdict-mark { width: 10px; height: 50px; border-radius: 99px; background: var(--accent); }
+    .verdict-label { margin: 0 0 2px; color: var(--accent-strong); font-size: 0.75rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; }
+    .verdict-text { margin: 0; font-size: 1.05rem; font-weight: 650; }
+    .chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .chart-block { min-width: 0; padding: 17px; border: 1px solid var(--border); border-radius: 12px; }
+    .chart-block h3 { font-size: 0.98rem; }
+    .chart-subtitle { margin: 3px 0 17px; color: var(--muted); font-size: 0.78rem; }
+    .prob-row, .range-row { margin: 0 0 17px; }
+    .row-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 6px; font-size: 0.78rem; }
+    .row-heading strong { font-size: 0.82rem; }
+    .prob-labels { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .prob-track { display: flex; width: 100%; height: 24px; overflow: hidden; border-radius: 6px; background: var(--surface-alt); }
+    .prob-rent { background: var(--rent); }
+    .prob-buy { background: var(--buy); }
+    .legend { display: flex; gap: 16px; margin-top: 5px; color: var(--muted); font-size: 0.76rem; }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .swatch { width: 9px; height: 9px; border-radius: 2px; }
+    .swatch.rent { background: var(--rent); }
+    .swatch.buy { background: var(--buy); }
+    .range-track { position: relative; height: 30px; margin: 2px 3px 0; }
+    .range-axis { position: absolute; top: 14px; right: 0; left: 0; height: 2px; background: var(--surface-alt); }
+    .range-zero { position: absolute; top: 5px; bottom: 4px; width: 2px; background: var(--text); }
+    .range-interval { position: absolute; top: 13px; height: 4px; border-radius: 4px; background: var(--accent); }
+    .range-dot { position: absolute; top: 8px; width: 14px; height: 14px; margin-left: -7px; border: 3px solid var(--surface); border-radius: 50%; background: var(--rent); box-shadow: 0 0 0 1px var(--rent); }
+    .range-values { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; color: var(--muted); font-size: 0.7rem; font-variant-numeric: tabular-nums; }
+    .range-values span:nth-child(2) { color: var(--text); text-align: center; font-weight: 700; }
+    .range-values span:last-child { text-align: right; }
+    .table-wrap { overflow-x: auto; margin-top: 18px; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+    th, td { padding: 10px 8px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+    th { color: var(--muted); font-size: 0.71rem; font-weight: 750; letter-spacing: 0.05em; text-transform: uppercase; }
+    th:first-child, td:first-child { text-align: left; }
+    .positive { color: var(--buy); font-weight: 750; }
+    .negative { color: var(--rent); font-weight: 750; }
+    .validation { margin-top: 24px; padding-top: 21px; border-top: 1px solid var(--border); }
+    .validation-header { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
+    .validation-header h3 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 1.35rem; font-weight: 500; }
+    .validation-header p { max-width: 640px; margin: 4px 0 0; color: var(--muted); font-size: 0.8rem; }
+    .validation-status { min-height: 20px; margin: 10px 0; color: var(--muted); font-size: 0.8rem; }
+    .validation-status.error { color: var(--danger); }
+    .validation-read { margin: 12px 0 17px; padding: 13px 15px; border-left: 4px solid var(--accent); background: var(--accent-soft); font-weight: 650; }
+    .calibration-row { margin-bottom: 16px; }
+    .calibration-bars { display: grid; grid-template-columns: 58px 1fr auto; gap: 5px 8px; align-items: center; font-size: 0.72rem; }
+    .calibration-track { height: 10px; overflow: hidden; border-radius: 5px; background: var(--surface-alt); }
+    .calibration-fill { display: block; height: 100%; border-radius: inherit; }
+    .calibration-fill.actual { background: var(--buy); }
+    .calibration-fill.forecast { background: var(--accent); }
+    .coverage-track { position: relative; height: 14px; margin-top: 7px; border-radius: 5px; background: var(--surface-alt); }
+    .coverage-fill { display: block; height: 100%; border-radius: inherit; background: var(--accent); opacity: 0.72; }
+    .coverage-target { position: absolute; top: -3px; bottom: -3px; left: 90%; width: 2px; background: var(--danger); }
+    .cohort-group { margin-bottom: 14px; }
+    .cohort-strip { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 7px; }
+    .cohort-cell { width: 15px; height: 15px; border-radius: 3px; }
+    .cohort-cell.buy { background: var(--buy); }
+    .cohort-cell.rent { background: var(--rent); }
+    .validation-legend { margin-top: 9px; }
+    .empty-state { display: grid; min-height: 490px; place-items: center; color: var(--muted); text-align: center; }
+    .empty-state strong { display: block; margin-bottom: 4px; color: var(--text); font-size: 1.05rem; }
+    [hidden] { display: none !important; }
+    @media (max-width: 980px) {
+      .workspace { grid-template-columns: 1fr; }
+      .controls { position: static; }
+      .field-grid { grid-template-columns: repeat(3, 1fr); }
+      .field.wide { grid-column: auto; }
+      .check-row { grid-column: auto; }
+    }
+    @media (max-width: 720px) {
+      .shell { width: min(100% - 20px, 680px); padding-top: 20px; }
+      .masthead { display: block; }
+      .source-note { margin-top: 10px; text-align: left; }
+      .field-grid, .chart-grid { grid-template-columns: 1fr; }
+      .field.wide, .check-row { grid-column: 1; }
+      .results { padding: 17px; }
+      .results-header { display: block; }
+      .run-meta { display: block; margin-top: 4px; }
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #171916;
+        --surface: #20231f;
+        --surface-alt: #30342e;
+        --text: #f0eee7;
+        --muted: #b6b8b0;
+        --border: #3e433b;
+        --accent: #78b4c7;
+        --accent-strong: #b8dce6;
+        --accent-soft: #263d43;
+        --buy: #66b796;
+        --buy-soft: #294238;
+        --rent: #e4a25e;
+        --rent-soft: #4d3725;
+        --danger: #f18a83;
+        --shadow: none;
+      }
+      .primary { color: #10242b; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="masthead">
+      <div>
+        <p class="eyebrow">Monte Carlo decision lab</p>
+        <h1>Boston Buy vs. Rent</h1>
+        <p class="subtitle">Adjust the assumptions, simulate thousands of possible futures, and see both the typical result and the chance that either strategy comes out ahead.</p>
+      </div>
+      <p class="source-note">Defaults: $1.2M home · $250k down · $4,500 rent · 6.66% mortgage</p>
+    </header>
+
+    <div class="workspace">
+      <aside class="panel controls">
+        <h2>Scenario assumptions</h2>
+        <p class="controls-intro">Rates are annual. Dollar inputs use today's nominal dollars.</p>
+        <form id="scenario-form">
+          <fieldset>
+            <legend>Home or rent</legend>
+            <div class="field-grid">
+              <div class="field wide"><label for="purchase-price">Purchase price ($)</label><input id="purchase-price" type="number" min="100000" step="10000" required></div>
+              <div class="field"><label for="down-payment">Down payment ($)</label><input id="down-payment" type="number" min="0" step="5000" required></div>
+              <div class="field"><label for="monthly-rent">Monthly rent ($)</label><input id="monthly-rent" type="number" min="0" step="100" required></div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Ownership costs</legend>
+            <div class="field-grid">
+              <div class="field"><label for="mortgage-rate">Mortgage rate (%)</label><input id="mortgage-rate" type="number" min="2.5" max="12" step="0.01" required></div>
+              <div class="field"><label for="property-tax">Property tax (%)</label><input id="property-tax" type="number" min="0" max="5" step="0.01" required></div>
+              <div class="field"><label for="maintenance">Maintenance (%)</label><input id="maintenance" type="number" min="0" max="5" step="0.05" required></div>
+              <div class="field"><label for="sale-cost">Selling costs (%)</label><input id="sale-cost" type="number" min="0" max="15" step="0.1" required></div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Market assumptions</legend>
+            <div class="field-grid">
+              <div class="field"><label for="stock-return">Stock return (%)</label><input id="stock-return" type="number" min="-5" max="20" step="0.1" required></div>
+              <div class="field"><label for="home-growth">Home appreciation (%)</label><input id="home-growth" type="number" min="-5" max="15" step="0.1" required></div>
+              <div class="field"><label for="rent-growth">Rent growth (%)</label><input id="rent-growth" type="number" min="-5" max="15" step="0.1" required></div>
+              <div class="field"><label for="inflation">Inflation (%)</label><input id="inflation" type="number" min="-2" max="15" step="0.1" required></div>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Simulation</legend>
+            <div class="field-grid">
+              <div class="field"><label for="runs">Possible futures</label><select id="runs"><option value="10000">10,000 · quick</option><option value="25000">25,000</option><option value="50000">50,000</option><option value="100000">100,000 · precise</option></select></div>
+              <div class="field"><label for="years">Years</label><select id="years"><option value="5">5</option><option value="10">10</option><option value="20">20</option><option value="30">30</option><option value="40">40</option></select></div>
+              <div class="field wide"><label for="seed">Random seed</label><input id="seed" type="number" min="0" max="2147483647" step="1" required></div>
+            </div>
+          </fieldset>
+
+          <details>
+            <summary>Advanced assumptions</summary>
+            <div class="field-grid">
+              <div class="field"><label for="insurance">Insurance (%)</label><input id="insurance" type="number" min="0" max="5" step="0.01" required></div>
+              <div class="field"><label for="hoa">Annual HOA ($)</label><input id="hoa" type="number" min="0" step="100" required></div>
+              <div class="field"><label for="buy-closing">Buyer closing (%)</label><input id="buy-closing" type="number" min="0" max="10" step="0.1" required></div>
+              <div class="field"><label for="stock-vol">Stock volatility (%)</label><input id="stock-vol" type="number" min="0" max="60" step="0.5" required></div>
+              <div class="field"><label for="home-vol">Home volatility (%)</label><input id="home-vol" type="number" min="0" max="40" step="0.5" required></div>
+              <div class="field"><label for="rent-vol">Rent volatility (%)</label><input id="rent-vol" type="number" min="0" max="30" step="0.5" required></div>
+              <div class="check-row"><input id="refinance" type="checkbox"><label for="refinance">Allow refinancing when rates fall</label></div>
+              <div class="field wide"><label for="refi-threshold">Required rate drop (%)</label><input id="refi-threshold" type="number" min="0" max="5" step="0.1" required></div>
+            </div>
+          </details>
+
+          <div class="actions">
+            <button class="primary" id="run-button" type="submit">Run simulation</button>
+            <button class="secondary" id="reset-button" type="button">Reset</button>
+          </div>
+        </form>
+      </aside>
+
+      <section class="panel results" aria-labelledby="results-title">
+        <div class="results-header">
+          <h2 id="results-title">Simulation results</h2>
+          <span class="run-meta" id="run-meta"></span>
+        </div>
+        <p class="status" id="status" role="status" aria-live="polite"></p>
+        <div class="empty-state" id="empty-state"><div><strong>Preparing the baseline simulation…</strong><span>The first results will appear here.</span></div></div>
+        <div id="result-content" hidden>
+          <div class="verdict">
+            <div class="verdict-mark" aria-hidden="true"></div>
+            <div><p class="verdict-label">Plain-English read</p><p class="verdict-text" id="verdict-text"></p></div>
+          </div>
+          <div class="chart-grid">
+            <section class="chart-block">
+              <h3>How often each strategy wins</h3>
+              <p class="chart-subtitle">Share of simulated futures at each horizon</p>
+              <div id="probability-chart"></div>
+              <div class="legend"><span><i class="swatch rent"></i>Rent wins</span><span><i class="swatch buy"></i>Buy wins</span></div>
+            </section>
+            <section class="chart-block">
+              <h3>Buyer's net-worth advantage</h3>
+              <p class="chart-subtitle">5th–95th percentile range; negative values favor renting</p>
+              <div id="range-chart"></div>
+            </section>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Horizon</th><th>Buy wins</th><th>Median advantage</th><th>5th percentile</th><th>95th percentile</th></tr></thead>
+              <tbody id="result-table"></tbody>
+            </table>
+          </div>
+          <section class="validation" aria-labelledby="validation-title">
+            <div class="validation-header">
+              <div><h3 id="validation-title">Historical validation</h3><p>Replay every complete Boston purchase cohort since 1991 using observed home prices, rents, stocks, mortgage rates, and property-tax rates.</p></div>
+              <button class="secondary" id="validation-button" type="button">Validate this scenario</button>
+            </div>
+            <p class="validation-status" id="validation-status" role="status" aria-live="polite"></p>
+            <div id="validation-content" hidden>
+              <p class="validation-read" id="validation-read"></p>
+              <div class="chart-grid">
+                <section class="chart-block"><h3>Probability calibration</h3><p class="chart-subtitle">Actual cohort win rate versus the model's average forecast</p><div id="calibration-chart"></div></section>
+                <section class="chart-block"><h3>Forecast interval coverage</h3><p class="chart-subtitle">Share of realized outcomes inside the predicted 5th–95th range; target is 90%</p><div id="coverage-chart"></div></section>
+              </div>
+              <section class="chart-block" style="margin-top:18px"><h3>Historical cohort outcomes</h3><p class="chart-subtitle">Each square is one purchase start year; overlapping cohorts are not independent</p><div id="cohort-chart"></div><div class="legend validation-legend"><span><i class="swatch buy"></i>Buying actually won</span><span><i class="swatch rent"></i>Renting actually won</span></div></section>
+              <div class="table-wrap"><table><thead><tr><th>Historical series</th><th>Observed mean</th><th>Model mean</th><th>Observed volatility</th><th>Model volatility</th></tr></thead><tbody id="moments-table"></tbody></table></div>
+            </div>
+          </section>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const form = document.getElementById('scenario-form');
+    const runButton = document.getElementById('run-button');
+    const resetButton = document.getElementById('reset-button');
+    const status = document.getElementById('status');
+    const emptyState = document.getElementById('empty-state');
+    const resultContent = document.getElementById('result-content');
+    const runMeta = document.getElementById('run-meta');
+    const validationButton = document.getElementById('validation-button');
+    let defaults;
+
+    const ids = {
+      purchasePrice: 'purchase-price', downPayment: 'down-payment', monthlyRent: 'monthly-rent',
+      mortgageRate: 'mortgage-rate', propertyTax: 'property-tax', maintenance: 'maintenance',
+      saleCost: 'sale-cost', stockReturn: 'stock-return', homeGrowth: 'home-growth',
+      rentGrowth: 'rent-growth', inflation: 'inflation', runs: 'runs', years: 'years', seed: 'seed',
+      insurance: 'insurance', hoa: 'hoa', buyClosing: 'buy-closing', stockVol: 'stock-vol',
+      homeVol: 'home-vol', rentVol: 'rent-vol', refinance: 'refinance', refiThreshold: 'refi-threshold'
+    };
+    const el = key => document.getElementById(ids[key]);
+    const number = key => Number(el(key).value);
+    const percent = key => number(key) / 100;
+    const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+    const compactCurrency = value => {
+      const sign = value < 0 ? '−' : value > 0 ? '+' : '';
+      const absolute = Math.abs(value);
+      if (absolute >= 1000000) return `${sign}$${(absolute / 1000000).toFixed(2)}M`;
+      return `${sign}$${Math.round(absolute / 1000)}k`;
+    };
+
+    function fillForm(data) {
+      el('purchasePrice').value = data.housing.purchase_price;
+      el('downPayment').value = data.housing.down_payment;
+      el('monthlyRent').value = data.housing.monthly_rent;
+      el('propertyTax').value = data.housing.property_tax_rate * 100;
+      el('insurance').value = data.housing.insurance_rate * 100;
+      el('maintenance').value = data.housing.maintenance_rate * 100;
+      el('hoa').value = data.housing.annual_hoa;
+      el('buyClosing').value = data.housing.purchase_closing_cost_rate * 100;
+      el('saleCost').value = data.housing.sale_cost_rate * 100;
+      el('mortgageRate').value = data.mortgage.initial_rate * 100;
+      el('refinance').checked = data.mortgage.refinance_enabled;
+      el('refiThreshold').value = data.mortgage.refinance_threshold * 100;
+      el('stockReturn').value = data.market.stock_return * 100;
+      el('stockVol').value = data.market.stock_volatility * 100;
+      el('homeGrowth').value = data.market.home_appreciation * 100;
+      el('homeVol').value = data.market.home_volatility * 100;
+      el('rentGrowth').value = data.market.rent_growth * 100;
+      el('rentVol').value = data.market.rent_volatility * 100;
+      el('inflation').value = data.market.general_inflation * 100;
+      el('runs').value = String(data.runs);
+      el('years').value = String(data.years);
+      el('seed').value = data.seed;
+    }
+
+    function payloadFromForm() {
+      return {
+        runs: number('runs'), years: number('years'), seed: number('seed'),
+        housing: {
+          purchase_price: number('purchasePrice'), down_payment: number('downPayment'),
+          monthly_rent: number('monthlyRent'), property_tax_rate: percent('propertyTax'),
+          insurance_rate: percent('insurance'), maintenance_rate: percent('maintenance'),
+          annual_hoa: number('hoa'), purchase_closing_cost_rate: percent('buyClosing'),
+          sale_cost_rate: percent('saleCost')
+        },
+        mortgage: {
+          initial_rate: percent('mortgageRate'), refinance_enabled: el('refinance').checked,
+          refinance_threshold: percent('refiThreshold')
+        },
+        market: {
+          stock_return: percent('stockReturn'), stock_volatility: percent('stockVol'),
+          home_appreciation: percent('homeGrowth'), home_volatility: percent('homeVol'),
+          rent_growth: percent('rentGrowth'), rent_volatility: percent('rentVol'),
+          general_inflation: percent('inflation')
+        }
+      };
+    }
+
+    function renderProbability(rows) {
+      const host = document.getElementById('probability-chart');
+      host.replaceChildren();
+      rows.forEach(row => {
+        const rent = (1 - row.buy_win_probability) * 100;
+        const buy = row.buy_win_probability * 100;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'prob-row';
+        wrapper.innerHTML = `
+          <div class="row-heading"><strong>${row.horizon_years} years</strong><span class="prob-labels">Rent ${rent.toFixed(1)}% · Buy ${buy.toFixed(1)}%</span></div>
+          <div class="prob-track" role="img" aria-label="At ${row.horizon_years} years, renting wins ${rent.toFixed(1)} percent and buying wins ${buy.toFixed(1)} percent of simulations">
+            <span class="prob-rent" style="width:${rent}%"></span><span class="prob-buy" style="width:${buy}%"></span>
+          </div>`;
+        host.appendChild(wrapper);
+      });
+    }
+
+    function renderRanges(rows) {
+      const host = document.getElementById('range-chart');
+      host.replaceChildren();
+      const values = rows.flatMap(row => [row.p05_net_worth_difference, row.p95_net_worth_difference, 0]);
+      let minimum = Math.min(...values);
+      let maximum = Math.max(...values);
+      const padding = Math.max((maximum - minimum) * 0.06, 1);
+      minimum -= padding;
+      maximum += padding;
+      const position = value => ((value - minimum) / (maximum - minimum)) * 100;
+      const zero = position(0);
+      rows.forEach(row => {
+        const p05 = position(row.p05_net_worth_difference);
+        const p95 = position(row.p95_net_worth_difference);
+        const median = position(row.median_net_worth_difference);
+        const wrapper = document.createElement('div');
+        wrapper.className = 'range-row';
+        wrapper.innerHTML = `
+          <div class="row-heading"><strong>${row.horizon_years} years</strong><span class="${row.median_net_worth_difference >= 0 ? 'positive' : 'negative'}">Median ${compactCurrency(row.median_net_worth_difference)}</span></div>
+          <div class="range-track" role="img" aria-label="At ${row.horizon_years} years, the buyer advantage ranges from ${currency.format(row.p05_net_worth_difference)} at the 5th percentile to ${currency.format(row.p95_net_worth_difference)} at the 95th percentile, with a median of ${currency.format(row.median_net_worth_difference)}">
+            <span class="range-axis"></span><span class="range-zero" style="left:${zero}%"></span>
+            <span class="range-interval" style="left:${p05}%;width:${Math.max(p95 - p05, 0.5)}%"></span>
+            <span class="range-dot" style="left:${median}%"></span>
+          </div>
+          <div class="range-values"><span>${compactCurrency(row.p05_net_worth_difference)}</span><span>${compactCurrency(row.median_net_worth_difference)}</span><span>${compactCurrency(row.p95_net_worth_difference)}</span></div>`;
+        host.appendChild(wrapper);
+      });
+    }
+
+    function renderTable(rows) {
+      const body = document.getElementById('result-table');
+      body.replaceChildren();
+      rows.forEach(row => {
+        const tr = document.createElement('tr');
+        const medianClass = row.median_net_worth_difference >= 0 ? 'positive' : 'negative';
+        tr.innerHTML = `<td>${row.horizon_years} years</td><td>${(row.buy_win_probability * 100).toFixed(1)}%</td><td class="${medianClass}">${currency.format(row.median_net_worth_difference)}</td><td>${currency.format(row.p05_net_worth_difference)}</td><td>${currency.format(row.p95_net_worth_difference)}</td>`;
+        body.appendChild(tr);
+      });
+    }
+
+    function renderResults(data) {
+      const rows = data.summary;
+      const final = rows[rows.length - 1];
+      const buy = final.buy_win_probability * 100;
+      const rent = 100 - buy;
+      const typicalWinner = final.median_net_worth_difference >= 0 ? 'Buying' : 'Renting';
+      const lead = currency.format(Math.abs(final.median_net_worth_difference));
+      document.getElementById('verdict-text').textContent = `${typicalWinner} is ahead by ${lead} in the median ${final.horizon_years}-year path. Buying wins ${buy.toFixed(1)}% of simulated futures; renting wins ${rent.toFixed(1)}%.`;
+      runMeta.textContent = `${data.runs.toLocaleString()} paths · ${data.elapsed_seconds.toFixed(2)}s`;
+      renderProbability(rows);
+      renderRanges(rows);
+      renderTable(rows);
+      emptyState.hidden = true;
+      resultContent.hidden = false;
+    }
+
+    function renderCalibration(rows) {
+      const host = document.getElementById('calibration-chart');
+      host.replaceChildren();
+      rows.forEach(row => {
+        const actual = row.actual_buy_win_rate * 100;
+        const forecast = row.mean_forecast_buy_probability * 100;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'calibration-row';
+        wrapper.innerHTML = `<div class="row-heading"><strong>${row.horizon_years} years · ${row.cohorts} cohorts</strong></div><div class="calibration-bars"><span>Actual</span><span class="calibration-track"><span class="calibration-fill actual" style="width:${actual}%"></span></span><strong>${actual.toFixed(1)}%</strong><span>Forecast</span><span class="calibration-track"><span class="calibration-fill forecast" style="width:${forecast}%"></span></span><strong>${forecast.toFixed(1)}%</strong></div>`;
+        host.appendChild(wrapper);
+      });
+    }
+
+    function renderCoverage(rows) {
+      const host = document.getElementById('coverage-chart');
+      host.replaceChildren();
+      rows.forEach(row => {
+        const coverage = row.forecast_90_interval_coverage * 100;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'calibration-row';
+        wrapper.innerHTML = `<div class="row-heading"><strong>${row.horizon_years} years</strong><span>${coverage.toFixed(1)}% covered</span></div><div class="coverage-track" role="img" aria-label="${coverage.toFixed(1)} percent coverage against a 90 percent target"><span class="coverage-fill" style="width:${coverage}%"></span><span class="coverage-target" aria-hidden="true"></span></div>`;
+        host.appendChild(wrapper);
+      });
+    }
+
+    function renderCohorts(rows) {
+      const host = document.getElementById('cohort-chart');
+      host.replaceChildren();
+      [...new Set(rows.map(row => row.horizon_years))].sort((a, b) => a - b).forEach(horizon => {
+        const cohortRows = rows.filter(row => row.horizon_years === horizon);
+        const group = document.createElement('div');
+        group.className = 'cohort-group';
+        const heading = document.createElement('div');
+        heading.className = 'row-heading';
+        heading.innerHTML = `<strong>${horizon} years</strong><span>${cohortRows[0].start_year}–${cohortRows[cohortRows.length - 1].start_year} starts</span>`;
+        const strip = document.createElement('div');
+        strip.className = 'cohort-strip';
+        cohortRows.forEach(row => {
+          const cell = document.createElement('span');
+          cell.className = `cohort-cell ${row.realized_buy_win ? 'buy' : 'rent'}`;
+          cell.title = `${row.start_year}–${row.end_year}: ${row.realized_buy_win ? 'buying' : 'renting'} won; buyer advantage ${(row.realized_difference_pct * 100).toFixed(1)}% of starting price`;
+          strip.appendChild(cell);
+        });
+        group.append(heading, strip);
+        host.appendChild(group);
+      });
+    }
+
+    function renderMoments(rows) {
+      const body = document.getElementById('moments-table');
+      body.replaceChildren();
+      rows.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${row.series}</td><td>${(row.observed_mean * 100).toFixed(1)}%</td><td>${(row.model_mean * 100).toFixed(1)}%</td><td>${(row.observed_volatility * 100).toFixed(1)}%</td><td>${(row.model_volatility * 100).toFixed(1)}%</td>`;
+        body.appendChild(tr);
+      });
+    }
+
+    function renderHistoricalValidation(data) {
+      const probabilityGap = data.calibration.reduce((worst, row) => Math.abs(row.mean_forecast_buy_probability - row.actual_buy_win_rate) > Math.abs(worst.mean_forecast_buy_probability - worst.actual_buy_win_rate) ? row : worst);
+      const lowestCoverage = data.calibration.reduce((lowest, row) => row.forecast_90_interval_coverage < lowest.forecast_90_interval_coverage ? row : lowest);
+      const gapPoints = Math.abs(probabilityGap.mean_forecast_buy_probability - probabilityGap.actual_buy_win_rate) * 100;
+      const direction = probabilityGap.mean_forecast_buy_probability > probabilityGap.actual_buy_win_rate ? 'overstated' : 'understated';
+      document.getElementById('validation-read').textContent = `Historical result: ${lowestCoverage.horizon_years}-year uncertainty was too narrow—its nominal 90% range covered ${(lowestCoverage.forecast_90_interval_coverage * 100).toFixed(1)}% of outcomes. At ${probabilityGap.horizon_years} years, the model ${direction} buying's win rate by ${gapPoints.toFixed(1)} percentage points.`;
+      renderCalibration(data.calibration);
+      renderCoverage(data.calibration);
+      renderCohorts(data.cohorts);
+      renderMoments(data.moments);
+      document.getElementById('validation-content').hidden = false;
+    }
+
+    async function runHistoricalValidation() {
+      const validationStatus = document.getElementById('validation-status');
+      validationButton.disabled = true;
+      validationButton.textContent = 'Replaying history…';
+      validationStatus.className = 'validation-status';
+      validationStatus.textContent = 'Forecasting and replaying 67 historical Boston cohorts…';
+      try {
+        const response = await fetch('/api/backtest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenario: payloadFromForm(), forecast_runs: 2000 }) });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Historical validation could not be completed.');
+        renderHistoricalValidation(data);
+        validationStatus.textContent = `Validated through ${data.data_end_year} using ${data.forecast_runs_per_cohort.toLocaleString()} forecast paths per cohort in ${data.elapsed_seconds.toFixed(2)}s.`;
+      } catch (error) {
+        validationStatus.className = 'validation-status error';
+        validationStatus.textContent = error.message;
+      } finally {
+        validationButton.disabled = false;
+        validationButton.textContent = 'Validate this scenario';
+      }
+    }
+
+    async function runSimulation() {
+      if (!form.reportValidity()) return;
+      runButton.disabled = true;
+      runButton.textContent = 'Simulating…';
+      status.className = 'status';
+      status.textContent = 'Generating correlated housing, market, rent, recession, and refinancing paths…';
+      try {
+        const response = await fetch('/api/simulate', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadFromForm())
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'The simulation could not be completed.');
+        renderResults(data);
+        status.textContent = 'Complete. Change any assumption and run again.';
+      } catch (error) {
+        status.className = 'status error';
+        status.textContent = error.message;
+      } finally {
+        runButton.disabled = false;
+        runButton.textContent = 'Run simulation';
+      }
+    }
+
+    form.addEventListener('submit', event => { event.preventDefault(); runSimulation(); });
+    resetButton.addEventListener('click', () => { fillForm(defaults); runSimulation(); });
+    validationButton.addEventListener('click', runHistoricalValidation);
+
+    async function initialize() {
+      try {
+        const response = await fetch('/api/defaults');
+        defaults = await response.json();
+        fillForm(defaults);
+        await runSimulation();
+        await runHistoricalValidation();
+      } catch (error) {
+        emptyState.hidden = true;
+        status.className = 'status error';
+        status.textContent = window.location.protocol === 'file:' ? 'This page was opened directly. Close this tab and use “Launch Buy vs Rent.cmd” so the simulation service starts with it.' : 'The local simulation service is not responding. Restart “Launch Buy vs Rent.cmd” and reload this page.';
+      }
+    }
+    initialize();
+  </script>
+</body>
+</html>

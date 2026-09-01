@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "boston-buy-vs-rent"
+version = "0.1.0"
+description = "Vectorized Monte Carlo buy-versus-rent simulation for Boston-area housing"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.24",
+  "pandas>=2.0",
+  "scipy>=1.10",
+  "matplotlib>=3.7",
+  "xlrd>=2.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+buy-vs-rent = "buy_vs_rent.cli:main"
+buy-vs-rent-web = "buy_vs_rent.web_server:main"
+buy-vs-rent-backtest = "buy_vs_rent.historical_cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/buy_vs_rent"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
