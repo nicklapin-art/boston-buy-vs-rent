@@ -66,12 +66,12 @@ class SweatEquityAssumptions:
 
     enabled: bool = False
     completion_year: int = 2
-    cash_cost: float = 0.0
-    labor_hours: float = 0.0
-    hourly_time_value: float = 0.0
-    value_added_low: float = 0.0
-    value_added_expected: float = 0.0
-    value_added_high: float = 0.0
+    cash_cost: float = 20_000.0
+    labor_hours: float = 750.0
+    hourly_time_value: float = 40.0
+    value_added_low: float = 15_000.0
+    value_added_expected: float = 30_000.0
+    value_added_high: float = 45_000.0
 
 
 @dataclass

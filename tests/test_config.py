@@ -1,7 +1,12 @@
 import pytest
 
 from buy_vs_rent.config import SimulationConfig
-from buy_vs_rent.web_server import config_from_payload, run_payload, sweat_equity_payload
+from buy_vs_rent.web_server import (
+    config_from_payload,
+    defaults_payload,
+    run_payload,
+    sweat_equity_payload,
+)
 
 
 def test_json_round_trip(tmp_path):
@@ -53,6 +58,20 @@ def test_rejects_invalid_sweat_equity_range():
     config.sweat_equity.value_added_high = 300_000
     with pytest.raises(ValueError, match="low <= expected <= high"):
         config.validate()
+
+
+def test_browser_defaults_prefill_opt_in_kitchen_remodel():
+    sweat = defaults_payload()["sweat_equity"]
+    assert sweat == {
+        "enabled": False,
+        "completion_year": 2,
+        "cash_cost": 20_000.0,
+        "labor_hours": 750.0,
+        "hourly_time_value": 40.0,
+        "value_added_low": 15_000.0,
+        "value_added_expected": 30_000.0,
+        "value_added_high": 45_000.0,
+    }
 
 
 def test_sweat_equity_browser_payload():

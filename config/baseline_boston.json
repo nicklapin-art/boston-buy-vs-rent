@@ -43,12 +43,12 @@
   "sweat_equity": {
     "enabled": false,
     "completion_year": 2,
-    "cash_cost": 0.0,
-    "labor_hours": 0.0,
-    "hourly_time_value": 0.0,
-    "value_added_low": 0.0,
-    "value_added_expected": 0.0,
-    "value_added_high": 0.0
+    "cash_cost": 20000.0,
+    "labor_hours": 750.0,
+    "hourly_time_value": 40.0,
+    "value_added_low": 15000.0,
+    "value_added_expected": 30000.0,
+    "value_added_high": 45000.0
   },
   "regimes": {
     "names": ["normal", "recession", "crash"],
