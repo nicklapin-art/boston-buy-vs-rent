@@ -40,6 +40,16 @@
       [0.1, -0.15, 0.1, 1.0]
     ]
   },
+  "sweat_equity": {
+    "enabled": false,
+    "completion_year": 2,
+    "cash_cost": 0.0,
+    "labor_hours": 0.0,
+    "hourly_time_value": 0.0,
+    "value_added_low": 0.0,
+    "value_added_expected": 0.0,
+    "value_added_high": 0.0
+  },
   "regimes": {
     "names": ["normal", "recession", "crash"],
     "transition": [
@@ -58,4 +68,3 @@
   "horizons": [5, 10, 20],
   "seed": 42
 }
-

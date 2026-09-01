@@ -53,14 +53,32 @@ def _draw_arithmetic_returns(
     return np.expm1(log_return)
 
 
+def _draw_sweat_equity_value(config: SimulationConfig, runs: int) -> FloatArray:
+    """Draw the completed project's immediate market-value contribution."""
+
+    sweat = config.sweat_equity
+    if not sweat.enabled:
+        return np.zeros(runs, dtype=float)
+    if sweat.value_added_low == sweat.value_added_high:
+        return np.full(runs, sweat.value_added_expected, dtype=float)
+    rng = np.random.default_rng(config.seed + 610_001)
+    return rng.triangular(
+        sweat.value_added_low,
+        sweat.value_added_expected,
+        sweat.value_added_high,
+        size=runs,
+    )
+
+
 def run_simulation(config: SimulationConfig | None = None) -> SimulationResult:
     """Run a fully vectorized simulation using annual market and cash-flow steps."""
     config = config or SimulationConfig()
     config.validate()
-    h, m, market, regime_cfg = (
+    h, m, market, sweat, regime_cfg = (
         config.housing,
         config.mortgage,
         config.market,
+        config.sweat_equity,
         config.regimes,
     )
     n = config.runs
@@ -82,6 +100,7 @@ def run_simulation(config: SimulationConfig | None = None) -> SimulationResult:
     )
     annual_hoa = np.full(n, h.annual_hoa, dtype=float)
     regime = np.zeros(n, dtype=int)
+    sweat_value_added = _draw_sweat_equity_value(config, n)
 
     stock_shifts = np.asarray(regime_cfg.stock_return_shifts)
     home_shifts = np.asarray(regime_cfg.home_return_shifts)
@@ -145,6 +164,9 @@ def run_simulation(config: SimulationConfig | None = None) -> SimulationResult:
         mortgage_payment, interest_paid, mortgage_balance, remaining_months = amortize_year(
             mortgage_balance, mortgage_rate, remaining_months
         )
+        project_completes = bool(sweat.enabled and year == sweat.completion_year)
+        if project_completes:
+            home_value += sweat_value_added
         average_home_value = home_value * (1.0 + 0.5 * home_return)
         property_tax = average_home_value * h.property_tax_rate
         insurance = average_home_value * h.insurance_rate
@@ -153,6 +175,8 @@ def run_simulation(config: SimulationConfig | None = None) -> SimulationResult:
             mortgage_payment + property_tax + insurance + maintenance
             + annual_hoa + refinance_cost
         )
+        if project_completes:
+            owner_cost += sweat.cash_cost
         renter_cost = monthly_rent * 12.0
 
         # Use a common annual housing budget. The cheaper strategy invests the savings.
@@ -177,6 +201,9 @@ def run_simulation(config: SimulationConfig | None = None) -> SimulationResult:
                 "refinance_path_share": float(refinance.mean()),
                 "recession_path_share": float(np.mean(regime == 1)) if len(regime_cfg.names) > 1 else 0.0,
                 "crash_path_share": float(np.mean(regime == 2)) if len(regime_cfg.names) > 2 else 0.0,
+                "mean_sweat_value_added": (
+                    float(sweat_value_added.mean()) if project_completes else 0.0
+                ),
             }
         )
 
@@ -206,6 +233,25 @@ def run_simulation(config: SimulationConfig | None = None) -> SimulationResult:
                 "mean_net_worth_difference": float(difference.mean()),
                 "median_buyer_net_worth": float(np.median(buyer)),
                 "median_renter_net_worth": float(np.median(renter)),
+                "economic_buy_win_probability": float(
+                    np.mean(
+                        difference
+                        - (
+                            sweat.labor_hours * sweat.hourly_time_value
+                            if sweat.enabled and sweat.completion_year <= horizon
+                            else 0.0
+                        )
+                        > 0.0
+                    )
+                ),
+                "median_economic_net_worth_difference": float(
+                    np.median(difference)
+                    - (
+                        sweat.labor_hours * sweat.hourly_time_value
+                        if sweat.enabled and sweat.completion_year <= horizon
+                        else 0.0
+                    )
+                ),
             }
         )
 

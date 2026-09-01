@@ -1,7 +1,7 @@
 import pytest
 
 from buy_vs_rent.config import SimulationConfig
-from buy_vs_rent.web_server import config_from_payload, run_payload
+from buy_vs_rent.web_server import config_from_payload, run_payload, sweat_equity_payload
 
 
 def test_json_round_trip(tmp_path):
@@ -43,3 +43,41 @@ def test_web_payload_runs_simulation():
 def test_web_payload_rejects_oversized_run():
     with pytest.raises(ValueError, match="runs must be between"):
         config_from_payload({"runs": 100001})
+
+
+def test_rejects_invalid_sweat_equity_range():
+    config = SimulationConfig()
+    config.sweat_equity.enabled = True
+    config.sweat_equity.value_added_low = 200_000
+    config.sweat_equity.value_added_expected = 100_000
+    config.sweat_equity.value_added_high = 300_000
+    with pytest.raises(ValueError, match="low <= expected <= high"):
+        config.validate()
+
+
+def test_sweat_equity_browser_payload():
+    payload = sweat_equity_payload(
+        {
+            "scenario": {
+                "runs": 1_000,
+                "years": 5,
+                "seed": 3,
+                "sweat_equity": {
+                    "enabled": True,
+                    "completion_year": 2,
+                    "cash_cost": 20_000,
+                    "labor_hours": 500,
+                    "hourly_time_value": 40,
+                    "value_added_low": 50_000,
+                    "value_added_expected": 100_000,
+                    "value_added_high": 150_000,
+                },
+            },
+            "runs": 1_000,
+            "curve_points": 5,
+            "horizon": 5,
+        }
+    )
+    assert payload["runs"] == 1_000
+    assert len(payload["curve"]) == 5
+    assert payload["summary"]["time_cost"] == 20_000

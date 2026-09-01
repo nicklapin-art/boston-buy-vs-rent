@@ -153,7 +153,7 @@ def replay_historical_cohort(
     if history[required].isna().any().any():
         raise ValueError(f"Incomplete historical data for {start_year}-{end_year}")
 
-    h, m = config.housing, config.mortgage
+    h, m, sweat = config.housing, config.mortgage, config.sweat_equity
     purchase_price, down_payment, monthly_rent = _cohort_start_values(config, dataset, start_year)
     home_value = purchase_price
     mortgage_balance = np.array([purchase_price - down_payment], dtype=float)
@@ -165,7 +165,7 @@ def replay_historical_cohort(
     scaled_refinance_fixed_cost = m.refinance_fixed_cost * purchase_price / h.purchase_price
     refinance_count = 0
 
-    for _, row in history.iterrows():
+    for project_year, (_, row) in enumerate(history.iterrows(), start=1):
         available_rate = float(row["mortgage_min_rate"])
         refinance = bool(
             m.refinance_enabled
@@ -186,6 +186,9 @@ def replay_historical_cohort(
         home_return = float(row["home_return"])
         rent_return = float(row["rent_return"])
         stock_return = float(row["stock_return"])
+        project_completes = bool(sweat.enabled and project_year == sweat.completion_year)
+        if project_completes:
+            home_value += sweat.value_added_expected * purchase_price / h.purchase_price
         average_home = home_value * (1.0 + 0.5 * home_return)
         owner_cost = (
             payment[0]
@@ -195,6 +198,8 @@ def replay_historical_cohort(
             + annual_hoa
             + refinance_cost
         )
+        if project_completes:
+            owner_cost += sweat.cash_cost * purchase_price / h.purchase_price
         renter_cost = monthly_rent * 12.0
         buyer_savings = max(renter_cost - owner_cost, 0.0)
         renter_savings = max(owner_cost - renter_cost, 0.0)
@@ -243,6 +248,8 @@ def _forecast_cohort(
     forecast.runs = runs
     forecast.years = horizon
     forecast.horizons = [horizon]
+    if forecast.sweat_equity.completion_year > horizon:
+        forecast.sweat_equity.enabled = False
     forecast.seed = config.seed + start_year * 101 + horizon * 10_007
     forecast.validate()
     summary = run_simulation(forecast).summary.iloc[0]

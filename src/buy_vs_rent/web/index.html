@@ -141,7 +141,7 @@
     th:first-child, td:first-child { text-align: left; }
     .positive { color: var(--buy); font-weight: 750; }
     .negative { color: var(--rent); font-weight: 750; }
-    .validation, .robustness { margin-top: 24px; padding-top: 21px; border-top: 1px solid var(--border); }
+    .validation, .robustness, .sweat-analysis { margin-top: 24px; padding-top: 21px; border-top: 1px solid var(--border); }
     .validation-header { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
     .validation-header h3 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 1.35rem; font-weight: 500; }
     .validation-header p { max-width: 640px; margin: 4px 0 0; color: var(--muted); font-size: 0.8rem; }
@@ -151,6 +151,12 @@
     .robustness-actions label { margin-bottom: 3px; }
     .method-note { margin: 0 0 15px; padding: 11px 13px; border-radius: 9px; background: var(--surface-alt); color: var(--muted); font-size: 0.79rem; }
     .method-note strong { color: var(--text); }
+    .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 14px 0 18px; }
+    .metric-card { padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
+    .metric-card span { display: block; color: var(--muted); font-size: 0.72rem; }
+    .metric-card strong { display: block; margin-top: 3px; font-size: 1.05rem; }
+    .curve-host { width: 100%; min-height: 280px; overflow-x: auto; }
+    .curve-host svg { display: block; width: 100%; min-width: 560px; height: auto; }
     .validation-read { margin: 12px 0 17px; padding: 13px 15px; border-left: 4px solid var(--accent); background: var(--accent-soft); font-weight: 650; }
     .calibration-row { margin-bottom: 16px; }
     .calibration-bars { display: grid; grid-template-columns: 58px 1fr auto; gap: 5px 8px; align-items: center; font-size: 0.72rem; }
@@ -192,6 +198,7 @@
       .masthead { display: block; }
       .source-note { margin-top: 10px; text-align: left; }
       .field-grid, .chart-grid { grid-template-columns: 1fr; }
+      .metric-grid { grid-template-columns: 1fr; }
       .field.wide, .check-row { grid-column: 1; }
       .results { padding: 17px; }
       .results-header { display: block; }
@@ -267,6 +274,21 @@
           </fieldset>
 
           <fieldset>
+            <legend>Sweat equity</legend>
+            <p class="controls-intro">Value inputs are the immediate post-project market uplift, not the eventual sale price.</p>
+            <div class="field-grid">
+              <div class="check-row"><input id="sweat-enabled" type="checkbox"><label for="sweat-enabled">Include a DIY value-add project</label></div>
+              <div class="field"><label for="sweat-year">Value recognized in year</label><input id="sweat-year" type="number" min="1" max="40" step="1" required></div>
+              <div class="field"><label for="sweat-cash">Materials + permits ($)</label><input id="sweat-cash" type="number" min="0" step="5000" required></div>
+              <div class="field"><label for="sweat-hours">Your labor (hours)</label><input id="sweat-hours" type="number" min="0" step="50" required></div>
+              <div class="field"><label for="sweat-hour-value">Value of your time ($/hr)</label><input id="sweat-hour-value" type="number" min="0" step="5" required></div>
+              <div class="field"><label for="sweat-value-low">Added value · low ($)</label><input id="sweat-value-low" type="number" min="0" step="5000" required></div>
+              <div class="field"><label for="sweat-value-expected">Added value · expected ($)</label><input id="sweat-value-expected" type="number" min="0" step="5000" required></div>
+              <div class="field wide"><label for="sweat-value-high">Added value · high ($)</label><input id="sweat-value-high" type="number" min="0" step="5000" required></div>
+            </div>
+          </fieldset>
+
+          <fieldset>
             <legend>Simulation</legend>
             <div class="field-grid">
               <div class="field"><label for="runs">Possible futures</label><select id="runs"><option value="10000">10,000 · quick</option><option value="25000">25,000</option><option value="50000">50,000</option><option value="100000">100,000 · precise</option></select></div>
@@ -327,6 +349,23 @@
               <tbody id="result-table"></tbody>
             </table>
           </div>
+          <section class="sweat-analysis" aria-labelledby="sweat-analysis-title">
+            <div class="validation-header">
+              <div><h3 id="sweat-analysis-title">Sweat-equity threshold</h3><p>Compare your project with no project, then solve how much immediate market value it must create for buying to reach even odds.</p></div>
+              <button class="secondary" id="sweat-analysis-button" type="button">Analyze sweat equity</button>
+            </div>
+            <p class="validation-status" id="sweat-analysis-status" role="status" aria-live="polite">Enable sweat equity and enter a low, expected, and high post-project value increase.</p>
+            <div id="sweat-analysis-content" hidden>
+              <p class="validation-read" id="sweat-analysis-read"></p>
+              <div class="metric-grid">
+                <div class="metric-card"><span>Financial break-even uplift</span><strong id="sweat-financial-break-even"></strong></div>
+                <div class="metric-card"><span>Break-even including your time</span><strong id="sweat-economic-break-even"></strong></div>
+                <div class="metric-card"><span>Median project contribution</span><strong id="sweat-median-contribution"></strong></div>
+              </div>
+              <section class="chart-block"><h3>Buying probability versus value created</h3><p class="chart-subtitle">The project cash cost is included; the economic line also subtracts your stated time value</p><div class="curve-host" id="sweat-curve-chart"></div><div class="legend"><span><i class="swatch buy"></i>Financial</span><span><i class="swatch rent"></i>Including time value</span></div></section>
+              <div class="table-wrap"><table><thead><tr><th>Immediate value added</th><th>Financial buy probability</th><th>Including time value</th><th>Median financial result</th></tr></thead><tbody id="sweat-curve-table"></tbody></table></div>
+            </div>
+          </section>
           <section class="robustness" aria-labelledby="robustness-title">
             <div class="validation-header">
               <div><h3 id="robustness-title">Assumption robustness</h3><p>Vary the expected returns and ownership-cost assumptions themselves, then run thousands of economic paths inside each plausible parameter set.</p></div>
@@ -382,6 +421,7 @@
     const validationButton = document.getElementById('validation-button');
     const robustnessButton = document.getElementById('robustness-button');
     const robustnessMethod = document.getElementById('robustness-method');
+    const sweatAnalysisButton = document.getElementById('sweat-analysis-button');
     let defaults;
 
     const ids = {
@@ -390,7 +430,10 @@
       saleCost: 'sale-cost', stockReturn: 'stock-return', homeGrowth: 'home-growth',
       rentGrowth: 'rent-growth', inflation: 'inflation', runs: 'runs', years: 'years', seed: 'seed',
       insurance: 'insurance', hoa: 'hoa', buyClosing: 'buy-closing', stockVol: 'stock-vol',
-      homeVol: 'home-vol', rentVol: 'rent-vol', refinance: 'refinance', refiThreshold: 'refi-threshold'
+      homeVol: 'home-vol', rentVol: 'rent-vol', refinance: 'refinance', refiThreshold: 'refi-threshold',
+      sweatEnabled: 'sweat-enabled', sweatYear: 'sweat-year', sweatCash: 'sweat-cash',
+      sweatHours: 'sweat-hours', sweatHourValue: 'sweat-hour-value', sweatValueLow: 'sweat-value-low',
+      sweatValueExpected: 'sweat-value-expected', sweatValueHigh: 'sweat-value-high'
     };
     const el = key => document.getElementById(ids[key]);
     const number = key => Number(el(key).value);
@@ -424,6 +467,14 @@
       el('rentGrowth').value = displayPercent(data.market.rent_growth);
       el('rentVol').value = displayPercent(data.market.rent_volatility);
       el('inflation').value = displayPercent(data.market.general_inflation);
+      el('sweatEnabled').checked = data.sweat_equity.enabled;
+      el('sweatYear').value = data.sweat_equity.completion_year;
+      el('sweatCash').value = data.sweat_equity.cash_cost;
+      el('sweatHours').value = data.sweat_equity.labor_hours;
+      el('sweatHourValue').value = data.sweat_equity.hourly_time_value;
+      el('sweatValueLow').value = data.sweat_equity.value_added_low;
+      el('sweatValueExpected').value = data.sweat_equity.value_added_expected;
+      el('sweatValueHigh').value = data.sweat_equity.value_added_high;
       el('runs').value = String(data.runs);
       el('years').value = String(data.years);
       el('seed').value = data.seed;
@@ -448,6 +499,12 @@
           home_appreciation: percent('homeGrowth'), home_volatility: percent('homeVol'),
           rent_growth: percent('rentGrowth'), rent_volatility: percent('rentVol'),
           general_inflation: percent('inflation')
+        },
+        sweat_equity: {
+          enabled: el('sweatEnabled').checked, completion_year: number('sweatYear'),
+          cash_cost: number('sweatCash'), labor_hours: number('sweatHours'),
+          hourly_time_value: number('sweatHourValue'), value_added_low: number('sweatValueLow'),
+          value_added_expected: number('sweatValueExpected'), value_added_high: number('sweatValueHigh')
         }
       };
     }
@@ -516,7 +573,8 @@
       const rent = 100 - buy;
       const typicalWinner = final.median_net_worth_difference >= 0 ? 'Buying' : 'Renting';
       const lead = currency.format(Math.abs(final.median_net_worth_difference));
-      document.getElementById('verdict-text').textContent = `${typicalWinner} is ahead by ${lead} in the median ${final.horizon_years}-year path. Buying wins ${buy.toFixed(1)}% of simulated futures; renting wins ${rent.toFixed(1)}%.`;
+      const economicNote = data.sweat_equity.enabled ? ` After valuing your labor time, buying wins ${(final.economic_buy_win_probability * 100).toFixed(1)}%.` : '';
+      document.getElementById('verdict-text').textContent = `${typicalWinner} is ahead by ${lead} in the median ${final.horizon_years}-year financial path. Buying wins ${buy.toFixed(1)}% of simulated futures; renting wins ${rent.toFixed(1)}%.${economicNote}`;
       runMeta.textContent = `${data.runs.toLocaleString()} paths · ${data.elapsed_seconds.toFixed(2)}s`;
       renderProbability(rows);
       renderRanges(rows);
@@ -594,6 +652,112 @@
       renderCohorts(data.cohorts);
       renderMoments(data.moments);
       document.getElementById('validation-content').hidden = false;
+    }
+
+    function renderSweatCurve(rows) {
+      const host = document.getElementById('sweat-curve-chart');
+      host.replaceChildren();
+      const width = 720, height = 290, left = 62, right = 18, top = 18, bottom = 48;
+      const plotWidth = width - left - right, plotHeight = height - top - bottom;
+      const maximum = Math.max(...rows.map(row => row.value_added), 1);
+      const x = value => left + value / maximum * plotWidth;
+      const y = probability => top + (1 - probability) * plotHeight;
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+      svg.setAttribute('role', 'img');
+      svg.setAttribute('aria-label', 'Buying probability as immediate sweat-equity value increases');
+      [0, 0.25, 0.5, 0.75, 1].forEach(probability => {
+        const line = document.createElementNS(svg.namespaceURI, 'line');
+        line.setAttribute('x1', left); line.setAttribute('x2', width - right);
+        line.setAttribute('y1', y(probability)); line.setAttribute('y2', y(probability));
+        line.setAttribute('stroke', probability === 0.5 ? 'var(--text)' : 'var(--border)');
+        line.setAttribute('stroke-width', probability === 0.5 ? '1.5' : '1');
+        line.setAttribute('opacity', probability === 0.5 ? '0.65' : '1');
+        svg.appendChild(line);
+        const label = document.createElementNS(svg.namespaceURI, 'text');
+        label.setAttribute('x', left - 9); label.setAttribute('y', y(probability) + 4);
+        label.setAttribute('text-anchor', 'end'); label.setAttribute('fill', 'var(--muted)'); label.setAttribute('font-size', '11');
+        label.textContent = `${Math.round(probability * 100)}%`;
+        svg.appendChild(label);
+      });
+      rows.forEach((row, index) => {
+        if (index % 2 !== 0 && index !== rows.length - 1) return;
+        const label = document.createElementNS(svg.namespaceURI, 'text');
+        label.setAttribute('x', x(row.value_added)); label.setAttribute('y', height - 20);
+        label.setAttribute('text-anchor', 'middle'); label.setAttribute('fill', 'var(--muted)'); label.setAttribute('font-size', '11');
+        label.textContent = compactCurrency(row.value_added).replace('+', '');
+        svg.appendChild(label);
+      });
+      const addSeries = (key, color) => {
+        const polyline = document.createElementNS(svg.namespaceURI, 'polyline');
+        polyline.setAttribute('points', rows.map(row => `${x(row.value_added)},${y(row[key])}`).join(' '));
+        polyline.setAttribute('fill', 'none'); polyline.setAttribute('stroke', color); polyline.setAttribute('stroke-width', '4');
+        polyline.setAttribute('stroke-linecap', 'round'); polyline.setAttribute('stroke-linejoin', 'round');
+        svg.appendChild(polyline);
+        rows.forEach(row => {
+          const dot = document.createElementNS(svg.namespaceURI, 'circle');
+          dot.setAttribute('cx', x(row.value_added)); dot.setAttribute('cy', y(row[key])); dot.setAttribute('r', '4');
+          dot.setAttribute('fill', color); dot.setAttribute('stroke', 'var(--surface)'); dot.setAttribute('stroke-width', '2');
+          svg.appendChild(dot);
+        });
+      };
+      addSeries('financial_buy_probability', 'var(--buy)');
+      addSeries('economic_buy_probability', 'var(--rent)');
+      host.appendChild(svg);
+    }
+
+    function renderSweatAnalysis(data) {
+      const row = data.summary;
+      const before = row.buy_probability_without_project * 100;
+      const after = row.buy_probability_with_project * 100;
+      const economic = row.economic_buy_probability_with_project * 100;
+      document.getElementById('sweat-analysis-read').textContent = `At ${data.horizon_years} years, your configured project changes buying's win probability from ${before.toFixed(1)}% without the project to ${after.toFixed(1)}% financially and ${economic.toFixed(1)}% after assigning ${currency.format(row.time_cost)} to your labor. Its median financial contribution is ${currency.format(row.median_incremental_financial_value)}.`;
+      const threshold = value => value === null ? `More than ${currency.format(data.tested_max_value)}` : currency.format(value);
+      document.getElementById('sweat-financial-break-even').textContent = threshold(data.financial_break_even_value);
+      document.getElementById('sweat-economic-break-even').textContent = threshold(data.economic_break_even_value);
+      const contribution = document.getElementById('sweat-median-contribution');
+      contribution.textContent = currency.format(row.median_incremental_financial_value);
+      contribution.className = row.median_incremental_financial_value >= 0 ? 'positive' : 'negative';
+      renderSweatCurve(data.curve);
+      const body = document.getElementById('sweat-curve-table');
+      body.replaceChildren();
+      data.curve.forEach(point => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${currency.format(point.value_added)}</td><td>${(point.financial_buy_probability * 100).toFixed(1)}%</td><td>${(point.economic_buy_probability * 100).toFixed(1)}%</td><td class="${point.median_financial_difference >= 0 ? 'positive' : 'negative'}">${currency.format(point.median_financial_difference)}</td>`;
+        body.appendChild(tr);
+      });
+      document.getElementById('sweat-analysis-content').hidden = false;
+    }
+
+    async function runSweatEquityAnalysis() {
+      const sweatStatus = document.getElementById('sweat-analysis-status');
+      if (!el('sweatEnabled').checked) {
+        sweatStatus.className = 'validation-status error';
+        sweatStatus.textContent = 'Enable “Include a DIY value-add project” before running this analysis.';
+        return;
+      }
+      if (!form.reportValidity()) return;
+      sweatAnalysisButton.disabled = true;
+      sweatAnalysisButton.textContent = 'Analyzing…';
+      sweatStatus.className = 'validation-status';
+      sweatStatus.textContent = 'Comparing the project with no project and mapping value-add thresholds…';
+      try {
+        const scenario = payloadFromForm();
+        const response = await fetch('/api/sweat-equity', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ scenario, horizon: scenario.years, runs: Math.min(scenario.runs, 20000), curve_points: 11 })
+        });
+        const data = await readApiResponse(response);
+        if (!response.ok) throw new Error(data.error || 'Sweat-equity analysis could not be completed.');
+        renderSweatAnalysis(data);
+        sweatStatus.textContent = `Completed ${data.curve.length} threshold scenarios with ${data.runs.toLocaleString()} paths each in ${data.elapsed_seconds.toFixed(2)}s.`;
+      } catch (error) {
+        sweatStatus.className = 'validation-status error';
+        sweatStatus.textContent = error.message;
+      } finally {
+        sweatAnalysisButton.disabled = false;
+        sweatAnalysisButton.textContent = 'Analyze sweat equity';
+      }
     }
 
     function renderRobustness(data) {
@@ -715,6 +879,10 @@
       status.textContent = 'Generating correlated housing, market, rent, recession, and refinancing paths…';
       document.getElementById('robustness-content').hidden = true;
       document.getElementById('robustness-status').textContent = 'Scenario changed. Run the assumption stress test for updated robustness results.';
+      document.getElementById('sweat-analysis-content').hidden = true;
+      document.getElementById('sweat-analysis-status').textContent = el('sweatEnabled').checked ? 'Scenario changed. Analyze sweat equity for updated thresholds.' : 'Enable sweat equity and enter a low, expected, and high post-project value increase.';
+      document.getElementById('validation-content').hidden = true;
+      document.getElementById('validation-status').textContent = 'Scenario changed. Validate this scenario to update the historical replay.';
       try {
         const response = await fetch('/api/simulate', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadFromForm())
@@ -736,6 +904,7 @@
     resetButton.addEventListener('click', () => { fillForm(defaults); runSimulation(); });
     validationButton.addEventListener('click', runHistoricalValidation);
     robustnessButton.addEventListener('click', runRobustness);
+    sweatAnalysisButton.addEventListener('click', runSweatEquityAnalysis);
     robustnessMethod.addEventListener('change', () => {
       document.getElementById('robustness-content').hidden = true;
       document.getElementById('robustness-status').textContent = 'Method changed. Run the assumption stress test to update the results.';

@@ -61,6 +61,20 @@ class MarketAssumptions:
 
 
 @dataclass
+class SweatEquityAssumptions:
+    """A discrete DIY project completed during the ownership period."""
+
+    enabled: bool = False
+    completion_year: int = 2
+    cash_cost: float = 0.0
+    labor_hours: float = 0.0
+    hourly_time_value: float = 0.0
+    value_added_low: float = 0.0
+    value_added_expected: float = 0.0
+    value_added_high: float = 0.0
+
+
+@dataclass
 class RegimeAssumptions:
     names: list[str] = field(default_factory=lambda: ["normal", "recession", "crash"])
     transition: list[list[float]] = field(
@@ -82,6 +96,7 @@ class SimulationConfig:
     housing: HousingAssumptions = field(default_factory=HousingAssumptions)
     mortgage: MortgageAssumptions = field(default_factory=MortgageAssumptions)
     market: MarketAssumptions = field(default_factory=MarketAssumptions)
+    sweat_equity: SweatEquityAssumptions = field(default_factory=SweatEquityAssumptions)
     regimes: RegimeAssumptions = field(default_factory=RegimeAssumptions)
     runs: int = 100_000
     years: int = 20
@@ -89,7 +104,13 @@ class SimulationConfig:
     seed: int = 42
 
     def validate(self) -> None:
-        h, m, market, regimes = self.housing, self.mortgage, self.market, self.regimes
+        h, m, market, sweat, regimes = (
+            self.housing,
+            self.mortgage,
+            self.market,
+            self.sweat_equity,
+            self.regimes,
+        )
         if self.runs < 1 or self.years < 1:
             raise ValueError("runs and years must be positive")
         if not self.horizons or min(self.horizons) < 1 or max(self.horizons) > self.years:
@@ -108,6 +129,17 @@ class SimulationConfig:
             raise ValueError("mortgage terms must be positive")
         if not 0 < m.rate_floor <= m.initial_rate <= m.rate_cap:
             raise ValueError("mortgage rates must satisfy floor <= initial <= cap")
+        if sweat.completion_year < 1:
+            raise ValueError("sweat-equity completion_year must be positive")
+        for name in ("cash_cost", "labor_hours", "hourly_time_value"):
+            if getattr(sweat, name) < 0:
+                raise ValueError(f"sweat-equity {name} cannot be negative")
+        if not 0 <= sweat.value_added_low <= sweat.value_added_expected <= sweat.value_added_high:
+            raise ValueError(
+                "sweat-equity value must satisfy 0 <= low <= expected <= high"
+            )
+        if sweat.enabled and sweat.completion_year > self.years:
+            raise ValueError("sweat-equity completion_year cannot exceed simulation years")
 
         corr = np.asarray(market.correlation, dtype=float)
         if corr.shape != (4, 4) or not np.allclose(corr, corr.T):
@@ -141,8 +173,13 @@ class SimulationConfig:
             housing=HousingAssumptions(**data.get("housing", {})),
             mortgage=MortgageAssumptions(**data.get("mortgage", {})),
             market=MarketAssumptions(**data.get("market", {})),
+            sweat_equity=SweatEquityAssumptions(**data.get("sweat_equity", {})),
             regimes=RegimeAssumptions(**data.get("regimes", {})),
-            **{k: v for k, v in data.items() if k not in {"housing", "mortgage", "market", "regimes"}},
+            **{
+                k: v
+                for k, v in data.items()
+                if k not in {"housing", "mortgage", "market", "sweat_equity", "regimes"}
+            },
         )
         config.validate()
         return config

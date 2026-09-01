@@ -19,6 +19,7 @@ from .config import SimulationConfig
 from .historical import run_historical_backtest
 from .historical_calibration import run_historically_calibrated_uncertainty
 from .simulation import run_simulation
+from .sweat_equity import run_sweat_equity_analysis
 from .uncertainty import run_parameter_uncertainty
 
 
@@ -61,7 +62,9 @@ def config_from_payload(payload: dict[str, Any]) -> SimulationConfig:
     """Create a validated config from the GUI's deliberately limited schema."""
     if not isinstance(payload, dict):
         raise ValueError("Request must be a JSON object")
-    allowed_top = {"runs", "years", "seed", "housing", "mortgage", "market"}
+    allowed_top = {
+        "runs", "years", "seed", "housing", "mortgage", "market", "sweat_equity"
+    }
     unknown = set(payload) - allowed_top
     if unknown:
         raise ValueError(f"Unknown setting: {sorted(unknown)[0]}")
@@ -82,8 +85,11 @@ def config_from_payload(payload: dict[str, Any]) -> SimulationConfig:
     housing = dict(payload.get("housing", {}))
     mortgage = dict(payload.get("mortgage", {}))
     market = dict(payload.get("market", {}))
-    if not all(isinstance(item, dict) for item in (housing, mortgage, market)):
-        raise ValueError("housing, mortgage, and market settings must be objects")
+    sweat_equity = dict(payload.get("sweat_equity", {}))
+    if not all(
+        isinstance(item, dict) for item in (housing, mortgage, market, sweat_equity)
+    ):
+        raise ValueError("housing, mortgage, market, and sweat_equity settings must be objects")
 
     _set_numeric_fields(
         config.housing,
@@ -115,6 +121,24 @@ def config_from_payload(payload: dict[str, Any]) -> SimulationConfig:
             "home_volatility", "rent_growth", "rent_volatility", "general_inflation",
         },
     )
+    sweat_enabled = sweat_equity.pop("enabled", None)
+    completion_year = sweat_equity.pop("completion_year", None)
+    _set_numeric_fields(
+        config.sweat_equity,
+        sweat_equity,
+        {
+            "cash_cost", "labor_hours", "hourly_time_value",
+            "value_added_low", "value_added_expected", "value_added_high",
+        },
+    )
+    if sweat_enabled is not None:
+        if not isinstance(sweat_enabled, bool):
+            raise ValueError("sweat-equity enabled must be true or false")
+        config.sweat_equity.enabled = sweat_enabled
+    if completion_year is not None:
+        config.sweat_equity.completion_year = int(
+            _finite_number(completion_year, "completion_year")
+        )
     config.validate()
     return config
 
@@ -132,6 +156,7 @@ def defaults_payload() -> dict[str, Any]:
             for key, value in asdict(config.market).items()
             if key != "correlation"
         },
+        "sweat_equity": asdict(config.sweat_equity),
     }
 
 
@@ -145,6 +170,36 @@ def run_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "years": config.years,
         "elapsed_seconds": round(elapsed, 3),
         "summary": result.summary.to_dict(orient="records"),
+        "sweat_equity": asdict(config.sweat_equity),
+    }
+
+
+def sweat_equity_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Compare the configured DIY project with no project and map its break-even."""
+
+    if not isinstance(payload, dict):
+        raise ValueError("Request must be a JSON object")
+    scenario = payload.get("scenario", {})
+    runs = int(_finite_number(payload.get("runs", 20_000), "runs"))
+    curve_points = int(_finite_number(payload.get("curve_points", 11), "curve_points"))
+    config = config_from_payload(scenario)
+    horizon = int(_finite_number(payload.get("horizon", config.years), "horizon"))
+    started = time.perf_counter()
+    result = run_sweat_equity_analysis(
+        config,
+        horizon=horizon,
+        runs=runs,
+        curve_points=curve_points,
+    )
+    return {
+        "elapsed_seconds": round(time.perf_counter() - started, 3),
+        "runs": result.runs,
+        "horizon_years": result.horizon,
+        "financial_break_even_value": result.financial_break_even_value,
+        "economic_break_even_value": result.economic_break_even_value,
+        "tested_max_value": result.tested_max_value,
+        "summary": result.summary.to_dict(orient="records")[0],
+        "curve": result.curve.to_dict(orient="records"),
     }
 
 
@@ -239,7 +294,7 @@ def robustness_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 class SimulationHandler(BaseHTTPRequestHandler):
-    server_version = "BuyVsRentGUI/0.3"
+    server_version = "BuyVsRentGUI/0.4"
 
     def _json(self, data: dict[str, Any], status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(data, allow_nan=False).encode("utf-8")
@@ -266,7 +321,9 @@ class SimulationHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path not in {"/api/simulate", "/api/backtest", "/api/robustness"}:
+        if self.path not in {
+            "/api/simulate", "/api/backtest", "/api/robustness", "/api/sweat-equity"
+        }:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         try:
@@ -278,6 +335,8 @@ class SimulationHandler(BaseHTTPRequestHandler):
                 self._json(historical_validation_payload(payload))
             elif self.path == "/api/robustness":
                 self._json(robustness_payload(payload))
+            elif self.path == "/api/sweat-equity":
+                self._json(sweat_equity_payload(payload))
             else:
                 self._json(run_payload(payload))
         except (ValueError, json.JSONDecodeError) as exc:
