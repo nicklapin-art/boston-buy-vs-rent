@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "boston-buy-vs-rent"
-version = "0.1.0"
+version = "0.2.0"
 description = "Vectorized Monte Carlo buy-versus-rent simulation for Boston-area housing"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,6 +23,7 @@ dev = ["pytest>=8.0"]
 buy-vs-rent = "buy_vs_rent.cli:main"
 buy-vs-rent-web = "buy_vs_rent.web_server:main"
 buy-vs-rent-backtest = "buy_vs_rent.historical_cli:main"
+buy-vs-rent-robustness = "buy_vs_rent.uncertainty_cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/buy_vs_rent"]

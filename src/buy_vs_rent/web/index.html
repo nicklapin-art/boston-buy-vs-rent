@@ -141,7 +141,7 @@
     th:first-child, td:first-child { text-align: left; }
     .positive { color: var(--buy); font-weight: 750; }
     .negative { color: var(--rent); font-weight: 750; }
-    .validation { margin-top: 24px; padding-top: 21px; border-top: 1px solid var(--border); }
+    .validation, .robustness { margin-top: 24px; padding-top: 21px; border-top: 1px solid var(--border); }
     .validation-header { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
     .validation-header h3 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 1.35rem; font-weight: 500; }
     .validation-header p { max-width: 640px; margin: 4px 0 0; color: var(--muted); font-size: 0.8rem; }
@@ -163,6 +163,16 @@
     .cohort-cell.buy { background: var(--buy); }
     .cohort-cell.rent { background: var(--rent); }
     .validation-legend { margin-top: 9px; }
+    .robustness-band-row, .influence-row { margin-bottom: 16px; }
+    .robustness-track { position: relative; height: 28px; border-radius: 6px; background: var(--surface-alt); }
+    .robustness-band { position: absolute; top: 10px; height: 8px; border-radius: 5px; background: var(--accent); opacity: 0.45; }
+    .robustness-median { position: absolute; top: 6px; width: 16px; height: 16px; margin-left: -8px; border: 3px solid var(--surface); border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+    .robustness-threshold { position: absolute; top: 2px; bottom: 2px; left: 50%; width: 2px; background: var(--text); opacity: 0.55; }
+    .influence-track { position: relative; height: 16px; border-radius: 5px; background: var(--surface-alt); }
+    .influence-zero { position: absolute; top: -2px; bottom: -2px; left: 50%; width: 2px; background: var(--text); opacity: 0.5; }
+    .influence-fill { position: absolute; top: 3px; height: 10px; border-radius: 4px; }
+    .influence-fill.positive { background: var(--buy); }
+    .influence-fill.negative { background: var(--rent); }
     .empty-state { display: grid; min-height: 490px; place-items: center; color: var(--muted); text-align: center; }
     .empty-state strong { display: block; margin-bottom: 4px; color: var(--text); font-size: 1.05rem; }
     [hidden] { display: none !important; }
@@ -311,6 +321,21 @@
               <tbody id="result-table"></tbody>
             </table>
           </div>
+          <section class="robustness" aria-labelledby="robustness-title">
+            <div class="validation-header">
+              <div><h3 id="robustness-title">Assumption robustness</h3><p>Vary the expected returns and ownership-cost assumptions themselves, then run thousands of economic paths inside each plausible parameter set.</p></div>
+              <button class="secondary" id="robustness-button" type="button">Stress-test assumptions</button>
+            </div>
+            <p class="validation-status" id="robustness-status" role="status" aria-live="polite">Uses 64 stratified assumption sets and 2,000 paths per set.</p>
+            <div id="robustness-content" hidden>
+              <p class="validation-read" id="robustness-read"></p>
+              <div class="chart-grid">
+                <section class="chart-block"><h3>Probability across assumptions</h3><p class="chart-subtitle">Middle 80% of parameter sets; marker is the median and line is 50%</p><div id="robustness-chart"></div></section>
+                <section class="chart-block"><h3>Main assumption drivers</h3><p class="chart-subtitle">Partial rank correlation with buying's win probability at the final horizon</p><div id="influence-chart"></div><div class="legend"><span><i class="swatch buy"></i>Higher value favors buying</span><span><i class="swatch rent"></i>Higher value favors renting</span></div></section>
+              </div>
+              <div class="table-wrap"><table><thead><tr><th>Uncertain assumption</th><th>Low</th><th>Most likely</th><th>High</th></tr></thead><tbody id="ranges-table"></tbody></table></div>
+            </div>
+          </section>
           <section class="validation" aria-labelledby="validation-title">
             <div class="validation-header">
               <div><h3 id="validation-title">Historical validation</h3><p>Replay every complete Boston purchase cohort since 1991 using observed home prices, rents, stocks, mortgage rates, and property-tax rates.</p></div>
@@ -341,6 +366,7 @@
     const resultContent = document.getElementById('result-content');
     const runMeta = document.getElementById('run-meta');
     const validationButton = document.getElementById('validation-button');
+    const robustnessButton = document.getElementById('robustness-button');
     let defaults;
 
     const ids = {
@@ -354,6 +380,7 @@
     const el = key => document.getElementById(ids[key]);
     const number = key => Number(el(key).value);
     const percent = key => number(key) / 100;
+    const displayPercent = value => Number((value * 100).toFixed(4));
     const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
     const compactCurrency = value => {
       const sign = value < 0 ? '−' : value > 0 ? '+' : '';
@@ -366,22 +393,22 @@
       el('purchasePrice').value = data.housing.purchase_price;
       el('downPayment').value = data.housing.down_payment;
       el('monthlyRent').value = data.housing.monthly_rent;
-      el('propertyTax').value = data.housing.property_tax_rate * 100;
-      el('insurance').value = data.housing.insurance_rate * 100;
-      el('maintenance').value = data.housing.maintenance_rate * 100;
+      el('propertyTax').value = displayPercent(data.housing.property_tax_rate);
+      el('insurance').value = displayPercent(data.housing.insurance_rate);
+      el('maintenance').value = displayPercent(data.housing.maintenance_rate);
       el('hoa').value = data.housing.annual_hoa;
-      el('buyClosing').value = data.housing.purchase_closing_cost_rate * 100;
-      el('saleCost').value = data.housing.sale_cost_rate * 100;
-      el('mortgageRate').value = data.mortgage.initial_rate * 100;
+      el('buyClosing').value = displayPercent(data.housing.purchase_closing_cost_rate);
+      el('saleCost').value = displayPercent(data.housing.sale_cost_rate);
+      el('mortgageRate').value = displayPercent(data.mortgage.initial_rate);
       el('refinance').checked = data.mortgage.refinance_enabled;
-      el('refiThreshold').value = data.mortgage.refinance_threshold * 100;
-      el('stockReturn').value = data.market.stock_return * 100;
-      el('stockVol').value = data.market.stock_volatility * 100;
-      el('homeGrowth').value = data.market.home_appreciation * 100;
-      el('homeVol').value = data.market.home_volatility * 100;
-      el('rentGrowth').value = data.market.rent_growth * 100;
-      el('rentVol').value = data.market.rent_volatility * 100;
-      el('inflation').value = data.market.general_inflation * 100;
+      el('refiThreshold').value = displayPercent(data.mortgage.refinance_threshold);
+      el('stockReturn').value = displayPercent(data.market.stock_return);
+      el('stockVol').value = displayPercent(data.market.stock_volatility);
+      el('homeGrowth').value = displayPercent(data.market.home_appreciation);
+      el('homeVol').value = displayPercent(data.market.home_volatility);
+      el('rentGrowth').value = displayPercent(data.market.rent_growth);
+      el('rentVol').value = displayPercent(data.market.rent_volatility);
+      el('inflation').value = displayPercent(data.market.general_inflation);
       el('runs').value = String(data.runs);
       el('years').value = String(data.years);
       el('seed').value = data.seed;
@@ -554,6 +581,72 @@
       document.getElementById('validation-content').hidden = false;
     }
 
+    function renderRobustness(data) {
+      const rows = data.summary;
+      const final = rows[rows.length - 1];
+      const integrated = final.integrated_buy_win_probability * 100;
+      const robust = final.robust_buy_share * 100;
+      const low = final.p10_buy_win_probability * 100;
+      const high = final.p90_buy_win_probability * 100;
+      document.getElementById('robustness-read').textContent = `After averaging over uncertain assumptions, buying wins ${integrated.toFixed(1)}% of paths at ${final.horizon_years} years. Buying wins a majority of paths in ${robust.toFixed(1)}% of parameter sets; the middle 80% of set-level probabilities spans ${low.toFixed(1)}%–${high.toFixed(1)}%.`;
+
+      const probabilityHost = document.getElementById('robustness-chart');
+      probabilityHost.replaceChildren();
+      rows.forEach(row => {
+        const rowLow = row.p10_buy_win_probability * 100;
+        const rowHigh = row.p90_buy_win_probability * 100;
+        const median = row.median_buy_win_probability * 100;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'robustness-band-row';
+        wrapper.innerHTML = `<div class="row-heading"><strong>${row.horizon_years} years</strong><span>${rowLow.toFixed(1)}%–${rowHigh.toFixed(1)}%</span></div><div class="robustness-track" role="img" aria-label="At ${row.horizon_years} years, the middle 80 percent of assumption sets ranges from ${rowLow.toFixed(1)} to ${rowHigh.toFixed(1)} percent, with a median of ${median.toFixed(1)} percent"><span class="robustness-threshold"></span><span class="robustness-band" style="left:${rowLow}%;width:${Math.max(rowHigh - rowLow, 0.5)}%"></span><span class="robustness-median" style="left:${median}%"></span></div>`;
+        probabilityHost.appendChild(wrapper);
+      });
+
+      const finalHorizon = final.horizon_years;
+      const influenceRows = data.influence.filter(row => row.horizon_years === finalHorizon).slice(0, 5);
+      const influenceHost = document.getElementById('influence-chart');
+      influenceHost.replaceChildren();
+      influenceRows.forEach(row => {
+        const value = row.partial_rank_correlation;
+        const left = value >= 0 ? 50 : 50 + value * 50;
+        const width = Math.abs(value) * 50;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'influence-row';
+        wrapper.innerHTML = `<div class="row-heading"><strong>${row.label}</strong><span>${value >= 0 ? '+' : ''}${value.toFixed(2)}</span></div><div class="influence-track" role="img" aria-label="${row.label} has a rank correlation of ${value.toFixed(2)} with buying probability"><span class="influence-zero"></span><span class="influence-fill ${value >= 0 ? 'positive' : 'negative'}" style="left:${left}%;width:${width}%"></span></div>`;
+        influenceHost.appendChild(wrapper);
+      });
+
+      const rangesBody = document.getElementById('ranges-table');
+      rangesBody.replaceChildren();
+      data.ranges.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${row.label}</td><td>${(row.low * 100).toFixed(2)}%</td><td>${(row.mode * 100).toFixed(2)}%</td><td>${(row.high * 100).toFixed(2)}%</td>`;
+        rangesBody.appendChild(tr);
+      });
+      document.getElementById('robustness-content').hidden = false;
+    }
+
+    async function runRobustness() {
+      const robustnessStatus = document.getElementById('robustness-status');
+      robustnessButton.disabled = true;
+      robustnessButton.textContent = 'Stress-testing…';
+      robustnessStatus.className = 'validation-status';
+      robustnessStatus.textContent = 'Running market paths across plausible long-run assumptions…';
+      try {
+        const response = await fetch('/api/robustness', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenario: payloadFromForm(), parameter_sets: 64, runs_per_set: 2000 }) });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Assumption stress test could not be completed.');
+        renderRobustness(data);
+        robustnessStatus.textContent = `Completed ${data.parameter_sets.toLocaleString()} parameter sets × ${data.runs_per_set.toLocaleString()} paths (${data.total_paths.toLocaleString()} total) in ${data.elapsed_seconds.toFixed(2)}s.`;
+      } catch (error) {
+        robustnessStatus.className = 'validation-status error';
+        robustnessStatus.textContent = error.message;
+      } finally {
+        robustnessButton.disabled = false;
+        robustnessButton.textContent = 'Stress-test assumptions';
+      }
+    }
+
     async function runHistoricalValidation() {
       const validationStatus = document.getElementById('validation-status');
       validationButton.disabled = true;
@@ -581,6 +674,8 @@
       runButton.textContent = 'Simulating…';
       status.className = 'status';
       status.textContent = 'Generating correlated housing, market, rent, recession, and refinancing paths…';
+      document.getElementById('robustness-content').hidden = true;
+      document.getElementById('robustness-status').textContent = 'Scenario changed. Run the assumption stress test for updated robustness results.';
       try {
         const response = await fetch('/api/simulate', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadFromForm())
@@ -601,6 +696,7 @@
     form.addEventListener('submit', event => { event.preventDefault(); runSimulation(); });
     resetButton.addEventListener('click', () => { fillForm(defaults); runSimulation(); });
     validationButton.addEventListener('click', runHistoricalValidation);
+    robustnessButton.addEventListener('click', runRobustness);
 
     async function initialize() {
       try {

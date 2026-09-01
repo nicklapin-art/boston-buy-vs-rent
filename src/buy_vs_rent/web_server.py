@@ -17,6 +17,7 @@ from typing import Any
 from .config import SimulationConfig
 from .historical import run_historical_backtest
 from .simulation import run_simulation
+from .uncertainty import run_parameter_uncertainty
 
 
 WEB_ROOT = Path(__file__).with_name("web")
@@ -165,6 +166,42 @@ def historical_validation_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def robustness_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    """Run bounded second-level uncertainty analysis for the browser GUI."""
+
+    if not isinstance(payload, dict):
+        raise ValueError("Request must be a JSON object")
+    scenario = payload.get("scenario", {})
+    parameter_sets = int(_finite_number(payload.get("parameter_sets", 64), "parameter_sets"))
+    runs_per_set = int(_finite_number(payload.get("runs_per_set", 2_000), "runs_per_set"))
+    if not 8 <= parameter_sets <= 128:
+        raise ValueError("parameter_sets must be between 8 and 128")
+    if not 250 <= runs_per_set <= 10_000:
+        raise ValueError("runs_per_set must be between 250 and 10,000")
+    if parameter_sets * runs_per_set > 1_000_000:
+        raise ValueError("parameter_sets times runs_per_set cannot exceed 1,000,000")
+    config = config_from_payload(scenario)
+    started = time.perf_counter()
+    result = run_parameter_uncertainty(
+        config,
+        parameter_sets=parameter_sets,
+        runs_per_set=runs_per_set,
+    )
+
+    def records(frame: Any) -> list[dict[str, Any]]:
+        return json.loads(frame.to_json(orient="records"))
+
+    return {
+        "elapsed_seconds": round(time.perf_counter() - started, 3),
+        "parameter_sets": result.parameter_sets,
+        "runs_per_set": result.runs_per_set,
+        "total_paths": result.parameter_sets * result.runs_per_set,
+        "ranges": [asdict(item) for item in result.ranges],
+        "summary": records(result.summary),
+        "influence": records(result.influence),
+    }
+
+
 class SimulationHandler(BaseHTTPRequestHandler):
     server_version = "BuyVsRentGUI/0.1"
 
@@ -193,7 +230,7 @@ class SimulationHandler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self) -> None:  # noqa: N802
-        if self.path not in {"/api/simulate", "/api/backtest"}:
+        if self.path not in {"/api/simulate", "/api/backtest", "/api/robustness"}:
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         try:
@@ -203,6 +240,8 @@ class SimulationHandler(BaseHTTPRequestHandler):
             payload = json.loads(self.rfile.read(size))
             if self.path == "/api/backtest":
                 self._json(historical_validation_payload(payload))
+            elif self.path == "/api/robustness":
+                self._json(robustness_payload(payload))
             else:
                 self._json(run_payload(payload))
         except (ValueError, json.JSONDecodeError) as exc:
