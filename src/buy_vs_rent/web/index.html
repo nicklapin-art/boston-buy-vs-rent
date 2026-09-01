@@ -351,15 +351,15 @@
           </div>
           <section class="sweat-analysis" aria-labelledby="sweat-analysis-title">
             <div class="validation-header">
-              <div><h3 id="sweat-analysis-title">Sweat-equity threshold</h3><p>Compare your project with no project, then solve how much immediate market value it must create for buying to reach even odds.</p></div>
+              <div><h3 id="sweat-analysis-title">How much value must the remodel add?</h3><p>Here, “worth buying” means buying beats renting in at least 50% of simulated futures. The answer is the required immediate post-remodel market-value increase.</p></div>
               <button class="secondary" id="sweat-analysis-button" type="button">Analyze sweat equity</button>
             </div>
             <p class="validation-status" id="sweat-analysis-status" role="status" aria-live="polite">Enable sweat equity and enter a low, expected, and high post-project value increase.</p>
             <div id="sweat-analysis-content" hidden>
               <p class="validation-read" id="sweat-analysis-read"></p>
               <div class="metric-grid">
-                <div class="metric-card"><span>Financial break-even uplift</span><strong id="sweat-financial-break-even"></strong></div>
-                <div class="metric-card"><span>Break-even including your time</span><strong id="sweat-economic-break-even"></strong></div>
+                <div class="metric-card"><span>Required uplift · cash only</span><strong id="sweat-financial-break-even"></strong></div>
+                <div class="metric-card"><span>Required uplift · including your time</span><strong id="sweat-economic-break-even"></strong></div>
                 <div class="metric-card"><span>Median project contribution</span><strong id="sweat-median-contribution"></strong></div>
               </div>
               <section class="chart-block"><h3>Buying probability versus value created</h3><p class="chart-subtitle">The project cash cost is included; the economic line also subtracts your stated time value</p><div class="curve-host" id="sweat-curve-chart"></div><div class="legend"><span><i class="swatch buy"></i>Financial</span><span><i class="swatch rent"></i>Including time value</span></div></section>
@@ -711,10 +711,12 @@
       const before = row.buy_probability_without_project * 100;
       const after = row.buy_probability_with_project * 100;
       const economic = row.economic_buy_probability_with_project * 100;
-      document.getElementById('sweat-analysis-read').textContent = `At ${data.horizon_years} years, your configured project changes buying's win probability from ${before.toFixed(1)}% without the project to ${after.toFixed(1)}% financially and ${economic.toFixed(1)}% after assigning ${currency.format(row.time_cost)} to your labor. Its median financial contribution is ${currency.format(row.median_incremental_financial_value)}.`;
       const threshold = value => value === null ? `More than ${currency.format(data.tested_max_value)}` : currency.format(value);
-      document.getElementById('sweat-financial-break-even').textContent = threshold(data.financial_break_even_value);
-      document.getElementById('sweat-economic-break-even').textContent = threshold(data.economic_break_even_value);
+      const financialThreshold = threshold(data.financial_break_even_value);
+      const economicThreshold = threshold(data.economic_break_even_value);
+      document.getElementById('sweat-analysis-read').textContent = `To make the house worth buying under the 50%-win rule, the remodel must add ${financialThreshold} of immediate market value, or ${economicThreshold} after valuing your labor. At ${data.horizon_years} years, your configured project changes buying's win probability from ${before.toFixed(1)}% without the project to ${after.toFixed(1)}% financially and ${economic.toFixed(1)}% after assigning ${currency.format(row.time_cost)} to your labor.`;
+      document.getElementById('sweat-financial-break-even').textContent = financialThreshold;
+      document.getElementById('sweat-economic-break-even').textContent = economicThreshold;
       const contribution = document.getElementById('sweat-median-contribution');
       contribution.textContent = currency.format(row.median_incremental_financial_value);
       contribution.className = row.median_incremental_financial_value >= 0 ? 'positive' : 'negative';

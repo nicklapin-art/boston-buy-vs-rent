@@ -14,7 +14,7 @@ From a terminal, install the project and launch the local GUI:
 python -m buy_vs_rent.web_server
 ```
 
-It opens `http://127.0.0.1:8000` automatically. Adjust the home, rent, ownership-cost, market, volatility, refinancing, run-count, and horizon inputs, then select **Run simulation**. The browser shows win probabilities, median outcomes, 5th–95th percentile ranges, and exact values. Select **Stress-test assumptions** to vary the expected returns and ownership-cost assumptions themselves. Choose either historically calibrated uncertainty or the original predefined judgment bands. The optional sweat-equity panel models a discrete DIY project and calculates its break-even market-value uplift. The calculations run locally through the same Python engine; no scenario data is uploaded.
+It opens `http://127.0.0.1:8000` automatically. Adjust the home, rent, ownership-cost, market, volatility, refinancing, run-count, and horizon inputs, then select **Run simulation**. The browser shows win probabilities, median outcomes, 5th–95th percentile ranges, and exact values. Select **Stress-test assumptions** to vary the expected returns and ownership-cost assumptions themselves. Choose either historically calibrated uncertainty or the original predefined judgment bands. The optional sweat-equity panel models a discrete DIY project and calculates the value uplift needed for the entire buy-vs-rent decision to reach a 50% buying probability. The calculations run locally through the same Python engine; no scenario data is uploaded.
 
 The interface also runs a historical validation panel. It replays complete Boston purchase cohorts with observed market data and shows forecast-versus-realized win rates, interval coverage, cohort outcomes, and historical return/volatility comparisons. Select **Validate this scenario** after changing assumptions.
 
@@ -61,7 +61,7 @@ The interface is prefilled with an opt-in Boston kitchen-remodel example: $20,00
 
 The cash cost is charged to the buyer in the completion year; under the model's common-budget accounting, the renter retains and invests the same cash. Personal time is not treated as cash. The interface reports both financial results and an economic result that subtracts `labor hours × hourly time value`.
 
-Select **Analyze sweat equity** to compare the configured project with the identical scenario without a project. The analysis runs common market paths, reports the project's median incremental contribution, and plots buying probability across a deterministic value-uplift curve. It linearly interpolates the immediate value increase required for buying to reach a 50% probability, both before and after valuing the user's time. The threshold is not an appraisal: it is the value that comparable sales or a subject-to-completion appraisal would need to support.
+Select **Analyze sweat equity** to compare the configured project with the identical scenario without a project. The analysis runs common market paths, reports the project's median incremental contribution, and plots buying probability across a deterministic value-uplift curve. It linearly interpolates the immediate value increase required for the entire buy-vs-rent decision to reach a 50% buying probability, both before and after valuing the user's time. This is not the remodel's own break-even point or an appraisal: it is the value that comparable sales or a subject-to-completion appraisal would need to support for buying to win half the simulated paths.
 
 To choose another port or avoid opening a browser automatically:
 
@@ -99,7 +99,7 @@ These are retrospective tests of today's assumptions against revised historical 
 - Path-by-path 30-year mortgage amortization.
 - Automatic refinancing when the available rate is at least 1 percentage point below the current loan rate, including percentage and fixed closing costs. Refinancing resets the term to 30 years by default.
 - Property tax, homeowners insurance, maintenance, HOA, purchase closing costs, and sale costs.
-- Optional sweat equity with completion timing, uncertain immediate value uplift, cash inputs, separately reported time value, and a 50% buy-probability break-even curve.
+- Optional sweat equity with completion timing, uncertain immediate value uplift, cash inputs, separately reported time value, and a curve showing the uplift needed for buying to reach a 50% win probability.
 - A fair cash-flow comparison: both strategies receive the same annual housing budget, and the cheaper strategy invests that year's difference in the same stock portfolio.
 - Buyer net worth at each horizon is after a hypothetical sale: home value less sale costs and mortgage balance, plus invested savings. Renter net worth is the invested upfront cash plus annual savings.
 - Summary statistics at years 5, 10, and 20; annual diagnostics; distribution plots; and one-way sensitivity analysis.
