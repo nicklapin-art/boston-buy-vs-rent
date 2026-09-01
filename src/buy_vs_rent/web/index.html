@@ -147,6 +147,10 @@
     .validation-header p { max-width: 640px; margin: 4px 0 0; color: var(--muted); font-size: 0.8rem; }
     .validation-status { min-height: 20px; margin: 10px 0; color: var(--muted); font-size: 0.8rem; }
     .validation-status.error { color: var(--danger); }
+    .robustness-actions { display: grid; grid-template-columns: minmax(210px, 1fr) auto; gap: 8px; align-items: end; min-width: 420px; }
+    .robustness-actions label { margin-bottom: 3px; }
+    .method-note { margin: 0 0 15px; padding: 11px 13px; border-radius: 9px; background: var(--surface-alt); color: var(--muted); font-size: 0.79rem; }
+    .method-note strong { color: var(--text); }
     .validation-read { margin: 12px 0 17px; padding: 13px 15px; border-left: 4px solid var(--accent); background: var(--accent-soft); font-weight: 650; }
     .calibration-row { margin-bottom: 16px; }
     .calibration-bars { display: grid; grid-template-columns: 58px 1fr auto; gap: 5px 8px; align-items: center; font-size: 0.72rem; }
@@ -191,6 +195,8 @@
       .field.wide, .check-row { grid-column: 1; }
       .results { padding: 17px; }
       .results-header { display: block; }
+      .validation-header { display: block; }
+      .robustness-actions { grid-template-columns: 1fr; min-width: 0; margin-top: 12px; }
       .run-meta { display: block; margin-top: 4px; }
     }
     @media (prefers-color-scheme: dark) {
@@ -324,16 +330,24 @@
           <section class="robustness" aria-labelledby="robustness-title">
             <div class="validation-header">
               <div><h3 id="robustness-title">Assumption robustness</h3><p>Vary the expected returns and ownership-cost assumptions themselves, then run thousands of economic paths inside each plausible parameter set.</p></div>
-              <button class="secondary" id="robustness-button" type="button">Stress-test assumptions</button>
+              <div class="robustness-actions">
+                <div><label for="robustness-method">Uncertainty method</label><select id="robustness-method"><option value="historical">Historically calibrated</option><option value="judgment">Predefined judgment bands</option></select></div>
+                <button class="secondary" id="robustness-button" type="button">Stress-test assumptions</button>
+              </div>
             </div>
             <p class="validation-status" id="robustness-status" role="status" aria-live="polite">Uses 64 stratified assumption sets and 2,000 paths per set.</p>
             <div id="robustness-content" hidden>
               <p class="validation-read" id="robustness-read"></p>
+              <p class="method-note" id="robustness-method-note"></p>
               <div class="chart-grid">
                 <section class="chart-block"><h3>Probability across assumptions</h3><p class="chart-subtitle">Middle 80% of parameter sets; marker is the median and line is 50%</p><div id="robustness-chart"></div></section>
                 <section class="chart-block"><h3>Main assumption drivers</h3><p class="chart-subtitle">Partial rank correlation with buying's win probability at the final horizon</p><div id="influence-chart"></div><div class="legend"><span><i class="swatch buy"></i>Higher value favors buying</span><span><i class="swatch rent"></i>Higher value favors renting</span></div></section>
               </div>
-              <div class="table-wrap"><table><thead><tr><th>Uncertain assumption</th><th>Low</th><th>Most likely</th><th>High</th></tr></thead><tbody id="ranges-table"></tbody></table></div>
+              <div class="table-wrap"><table><thead><tr><th>Uncertain assumption</th><th id="range-low-heading">Low</th><th>Your baseline</th><th id="range-high-heading">High</th><th>Source</th></tr></thead><tbody id="ranges-table"></tbody></table></div>
+              <div id="walk-forward-section" hidden>
+                <div class="table-wrap"><table><thead><tr><th>Walk-forward check</th><th>Horizon</th><th>Unseen cohorts</th><th>80% band coverage</th><th>Median error</th></tr></thead><tbody id="walk-forward-table"></tbody></table></div>
+                <p class="chart-subtitle">Each forecast uses only data available before its start year. Overlapping cohorts are not independent.</p>
+              </div>
             </div>
           </section>
           <section class="validation" aria-labelledby="validation-title">
@@ -367,6 +381,7 @@
     const runMeta = document.getElementById('run-meta');
     const validationButton = document.getElementById('validation-button');
     const robustnessButton = document.getElementById('robustness-button');
+    const robustnessMethod = document.getElementById('robustness-method');
     let defaults;
 
     const ids = {
@@ -588,7 +603,30 @@
       const robust = final.robust_buy_share * 100;
       const low = final.p10_buy_win_probability * 100;
       const high = final.p90_buy_win_probability * 100;
-      document.getElementById('robustness-read').textContent = `After averaging over uncertain assumptions, buying wins ${integrated.toFixed(1)}% of paths at ${final.horizon_years} years. Buying wins a majority of paths in ${robust.toFixed(1)}% of parameter sets; the middle 80% of set-level probabilities spans ${low.toFixed(1)}%–${high.toFixed(1)}%.`;
+      const methodLabel = data.calibration.method_label || 'Assumption robustness';
+      document.getElementById('robustness-read').textContent = `${methodLabel}: after averaging over uncertain assumptions, buying wins ${integrated.toFixed(1)}% of paths at ${final.horizon_years} years. Buying wins a majority of paths in ${robust.toFixed(1)}% of parameter sets; the middle 80% of set-level probabilities spans ${low.toFixed(1)}%–${high.toFixed(1)}%.`;
+
+      const methodNote = document.getElementById('robustness-method-note');
+      const walkForwardSection = document.getElementById('walk-forward-section');
+      if (data.method === 'historical') {
+        methodNote.innerHTML = `<strong>What was calibrated:</strong> joint stock, Boston home, and Boston rent uncertainty uses ${data.calibration.return_observations} annual observations from ${data.calibration.return_data_start_year}–${data.calibration.data_end_year}, resampled in ${data.calibration.block_years}-year blocks around your entered assumptions. Boston tax uncertainty uses ${data.calibration.tax_observations} observations from ${data.calibration.tax_data_start_year}–${data.calibration.tax_data_end_year}. Maintenance, insurance, and selling costs remain judgment bands. Your starting mortgage rate is fixed.`;
+        document.getElementById('range-low-heading').textContent = '10th percentile';
+        document.getElementById('range-high-heading').textContent = '90th percentile';
+        const walkForwardBody = document.getElementById('walk-forward-table');
+        walkForwardBody.replaceChildren();
+        data.calibration.walk_forward.forEach(row => {
+          const tr = document.createElement('tr');
+          const errorPoints = row.median_forecast_error * 100;
+          tr.innerHTML = `<td>${row.label}</td><td>${row.horizon_years} years</td><td>${row.cohorts}</td><td>${(row.forecast_80_interval_coverage * 100).toFixed(1)}%</td><td>${errorPoints >= 0 ? '+' : ''}${errorPoints.toFixed(2)} pp</td>`;
+          walkForwardBody.appendChild(tr);
+        });
+        walkForwardSection.hidden = false;
+      } else {
+        methodNote.innerHTML = '<strong>What was varied:</strong> all seven assumption windows use predefined widths centered on your entries. They are transparent judgment calls rather than estimates from the historical dataset. Your starting mortgage rate is fixed.';
+        document.getElementById('range-low-heading').textContent = 'Low';
+        document.getElementById('range-high-heading').textContent = 'High';
+        walkForwardSection.hidden = true;
+      }
 
       const probabilityHost = document.getElementById('robustness-chart');
       probabilityHost.replaceChildren();
@@ -620,7 +658,8 @@
       rangesBody.replaceChildren();
       data.ranges.forEach(row => {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td>${row.label}</td><td>${(row.low * 100).toFixed(2)}%</td><td>${(row.mode * 100).toFixed(2)}%</td><td>${(row.high * 100).toFixed(2)}%</td>`;
+        const source = row.group === 'historical' ? 'Historical blocks' : 'Judgment band';
+        tr.innerHTML = `<td>${row.label}</td><td>${(row.low * 100).toFixed(2)}%</td><td>${(row.mode * 100).toFixed(2)}%</td><td>${(row.high * 100).toFixed(2)}%</td><td>${source}</td>`;
         rangesBody.appendChild(tr);
       });
       document.getElementById('robustness-content').hidden = false;
@@ -631,10 +670,10 @@
       robustnessButton.disabled = true;
       robustnessButton.textContent = 'Stress-testing…';
       robustnessStatus.className = 'validation-status';
-      robustnessStatus.textContent = 'Running market paths across plausible long-run assumptions…';
+      robustnessStatus.textContent = robustnessMethod.value === 'historical' ? 'Calibrating from history, checking unseen periods, and running market paths…' : 'Running market paths across predefined assumption bands…';
       try {
-        const response = await fetch('/api/robustness', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenario: payloadFromForm(), parameter_sets: 64, runs_per_set: 2000 }) });
-        const data = await response.json();
+        const response = await fetch('/api/robustness', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenario: payloadFromForm(), method: robustnessMethod.value, parameter_sets: 64, runs_per_set: 2000 }) });
+        const data = await readApiResponse(response);
         if (!response.ok) throw new Error(data.error || 'Assumption stress test could not be completed.');
         renderRobustness(data);
         robustnessStatus.textContent = `Completed ${data.parameter_sets.toLocaleString()} parameter sets × ${data.runs_per_set.toLocaleString()} paths (${data.total_paths.toLocaleString()} total) in ${data.elapsed_seconds.toFixed(2)}s.`;
@@ -655,7 +694,7 @@
       validationStatus.textContent = 'Forecasting and replaying 67 historical Boston cohorts…';
       try {
         const response = await fetch('/api/backtest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenario: payloadFromForm(), forecast_runs: 2000 }) });
-        const data = await response.json();
+        const data = await readApiResponse(response);
         if (!response.ok) throw new Error(data.error || 'Historical validation could not be completed.');
         renderHistoricalValidation(data);
         validationStatus.textContent = `Validated through ${data.data_end_year} using ${data.forecast_runs_per_cohort.toLocaleString()} forecast paths per cohort in ${data.elapsed_seconds.toFixed(2)}s.`;
@@ -680,7 +719,7 @@
         const response = await fetch('/api/simulate', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payloadFromForm())
         });
-        const data = await response.json();
+        const data = await readApiResponse(response);
         if (!response.ok) throw new Error(data.error || 'The simulation could not be completed.');
         renderResults(data);
         status.textContent = 'Complete. Change any assumption and run again.';
@@ -697,11 +736,31 @@
     resetButton.addEventListener('click', () => { fillForm(defaults); runSimulation(); });
     validationButton.addEventListener('click', runHistoricalValidation);
     robustnessButton.addEventListener('click', runRobustness);
+    robustnessMethod.addEventListener('change', () => {
+      document.getElementById('robustness-content').hidden = true;
+      document.getElementById('robustness-status').textContent = 'Method changed. Run the assumption stress test to update the results.';
+    });
+
+    async function readApiResponse(response) {
+      const contentType = response.headers.get('content-type') || '';
+      const body = await response.text();
+      if (!contentType.toLowerCase().includes('application/json')) {
+        if (response.status === 404) {
+          throw new Error('The local simulation service is out of date. Close its terminal, restart “Launch Buy vs Rent.cmd”, and reload this page.');
+        }
+        throw new Error(`The local simulation service returned an unexpected response (${response.status}). Restart it and reload this page.`);
+      }
+      try {
+        return JSON.parse(body);
+      } catch {
+        throw new Error('The local simulation service returned invalid data. Restart it and reload this page.');
+      }
+    }
 
     async function initialize() {
       try {
         const response = await fetch('/api/defaults');
-        defaults = await response.json();
+        defaults = await readApiResponse(response);
         fillForm(defaults);
         await runSimulation();
         await runHistoricalValidation();

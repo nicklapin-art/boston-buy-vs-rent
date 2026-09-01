@@ -14,13 +14,19 @@ From a terminal, install the project and launch the local GUI:
 python -m buy_vs_rent.web_server
 ```
 
-It opens `http://127.0.0.1:8000` automatically. Adjust the home, rent, ownership-cost, market, volatility, refinancing, run-count, and horizon inputs, then select **Run simulation**. The browser shows win probabilities, median outcomes, 5th–95th percentile ranges, and exact values. Select **Stress-test assumptions** to vary the expected returns and ownership-cost assumptions themselves. The calculations run locally through the same Python engine; no scenario data is uploaded.
+It opens `http://127.0.0.1:8000` automatically. Adjust the home, rent, ownership-cost, market, volatility, refinancing, run-count, and horizon inputs, then select **Run simulation**. The browser shows win probabilities, median outcomes, 5th–95th percentile ranges, and exact values. Select **Stress-test assumptions** to vary the expected returns and ownership-cost assumptions themselves. Choose either historically calibrated uncertainty or the original predefined judgment bands. The calculations run locally through the same Python engine; no scenario data is uploaded.
 
 The interface also runs a historical validation panel. It replays complete Boston purchase cohorts with observed market data and shows forecast-versus-realized win rates, interval coverage, cohort outcomes, and historical return/volatility comparisons. Select **Validate this scenario** after changing assumptions.
 
 ## Assumption robustness
 
-Ordinary Monte Carlo paths vary future returns around one fixed set of expected returns and cost rates. The robustness analysis adds a second level: it samples 64 plausible parameter sets with Latin hypercube sampling, then runs 2,000 correlated economic paths inside each set by default.
+Ordinary Monte Carlo paths vary future returns around one fixed set of expected returns and cost rates. The robustness analysis adds a second level: it samples 64 plausible parameter sets, then runs 2,000 correlated economic paths inside each set by default. The starting mortgage rate, purchase price, down payment, and starting rent always remain the values entered by the user.
+
+The default **historically calibrated** method uses a five-year moving-block bootstrap. Stocks, Boston home appreciation, and Boston rent growth are resampled jointly so their long-run assumption errors retain historically observed dependence. The bootstrap deviations are centered on the user's entered long-run assumptions: history determines the width, skew, and joint movement, while the user's forecast remains the baseline. Boston property-tax uncertainty is bootstrapped from its available history. The interface reports the exact data period, calibrated percentiles, and walk-forward checks that use only data available before each historical forecast start.
+
+Consistent local histories are unavailable for maintenance, homeowners insurance, and selling costs, so those three inputs remain explicitly labeled judgment bands. Historical calibration does not vary the initial mortgage rate. It also does not turn historical averages into a forecast or eliminate structural uncertainty; overlapping long-horizon cohorts are a small, dependent sample.
+
+The alternative **predefined judgment bands** reproduces the original analysis. Its triangular ranges use the configured scenario as the most likely value:
 
 The default triangular ranges use the configured scenario as the most likely value:
 
@@ -36,15 +42,16 @@ The default triangular ranges use the configured scenario as the most likely val
 
 The output distinguishes the **integrated buy-win probability**—the average across parameter sets—from the **robust buy share**, the fraction of parameter sets in which buying wins more than half of economic paths. It also reports the 10th–90th percentile range of set-level probabilities and partial rank correlations that control for the other sampled assumptions.
 
-For the baseline, 64 × 2,000 analysis produces a 20-year integrated buy-win probability of 48.1%, a 31.6%–62.3% middle-80% assumption range, and a 51.6% robust buy share. These values are reproducible with the default seed but remain conditional on the chosen uncertainty ranges. Annual economic shocks retain the model's configured correlation structure; the long-run parameter draws are stratified independently and should be replaced with property-specific ranges when evidence is available.
+For the baseline, the historically calibrated 64 × 2,000 analysis produces a 20-year integrated buy-win probability of 37.4%, a 7.3%–64.5% middle-80% assumption range, and a 32.8% robust buy share. The original judgment-band method produces 48.1%, 31.6%–62.3%, and 51.6%, respectively. The difference is material and is why the interface shows the method and its range provenance beside every result.
 
 Run the saved-report workflow from a terminal:
 
 ```powershell
-python -m buy_vs_rent.uncertainty_cli --config config/baseline_boston.json --parameter-sets 64 --runs-per-set 5000
+python -m buy_vs_rent.uncertainty_cli --config config/baseline_boston.json --method historical --parameter-sets 64 --runs-per-set 5000
+python -m buy_vs_rent.uncertainty_cli --config config/baseline_boston.json --method judgment --parameter-sets 64 --runs-per-set 5000
 ```
 
-It writes `robustness_summary.csv`, every parameter-set outcome, parameter influence, exact ranges, two charts, and `ROBUSTNESS_REPORT.md` under `results/parameter_uncertainty/` by default. The Python API accepts custom `ParameterRange` objects for fully user-defined distributions.
+It writes `robustness_summary.csv`, every parameter-set outcome, parameter influence, exact ranges, calibration metadata, two charts, and `ROBUSTNESS_REPORT.md` under `results/parameter_uncertainty/` by default. The Python API accepts custom `ParameterRange` objects for fully user-defined distributions.
 
 To choose another port or avoid opening a browser automatically:
 
@@ -136,6 +143,7 @@ Edit the JSON to change any assumption. Decimal rates use `0.0666` for 6.66%. Th
 ```python
 from buy_vs_rent import SimulationConfig, run_simulation
 from buy_vs_rent.sensitivity import run_sensitivity
+from buy_vs_rent.historical_calibration import run_historically_calibrated_uncertainty
 from buy_vs_rent.uncertainty import run_parameter_uncertainty
 
 config = SimulationConfig.from_json("config/baseline_boston.json")
@@ -145,7 +153,12 @@ config.mortgage.initial_rate = 0.0625
 result = run_simulation(config)
 print(result.summary)
 sensitivity = run_sensitivity(config, horizon=10, runs=20_000)
-robustness = run_parameter_uncertainty(config, parameter_sets=64, runs_per_set=5_000)
+robustness = run_historically_calibrated_uncertainty(
+    config, parameter_sets=64, runs_per_set=5_000
+)
+judgment_robustness = run_parameter_uncertainty(
+    config, parameter_sets=64, runs_per_set=5_000
+)
 ```
 
 ## Accounting sequence

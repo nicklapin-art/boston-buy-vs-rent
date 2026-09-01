@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import socket
 import threading
 import time
 import webbrowser
@@ -16,6 +17,7 @@ from typing import Any
 
 from .config import SimulationConfig
 from .historical import run_historical_backtest
+from .historical_calibration import run_historically_calibrated_uncertainty
 from .simulation import run_simulation
 from .uncertainty import run_parameter_uncertainty
 
@@ -24,6 +26,17 @@ WEB_ROOT = Path(__file__).with_name("web")
 MAX_REQUEST_BYTES = 100_000
 MAX_RUNS = 100_000
 MAX_YEARS = 40
+
+
+class SingleInstanceHTTPServer(ThreadingHTTPServer):
+    """Refuse to share a port with a stale copy of the GUI server."""
+
+    allow_reuse_address = False
+
+    def server_bind(self) -> None:
+        if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
 
 def _finite_number(value: Any, name: str) -> float:
@@ -167,11 +180,14 @@ def historical_validation_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def robustness_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Run bounded second-level uncertainty analysis for the browser GUI."""
+    """Run judgment-band or historically calibrated second-level uncertainty."""
 
     if not isinstance(payload, dict):
         raise ValueError("Request must be a JSON object")
     scenario = payload.get("scenario", {})
+    method = str(payload.get("method", "historical"))
+    if method not in {"historical", "judgment"}:
+        raise ValueError("method must be historical or judgment")
     parameter_sets = int(_finite_number(payload.get("parameter_sets", 64), "parameter_sets"))
     runs_per_set = int(_finite_number(payload.get("runs_per_set", 2_000), "runs_per_set"))
     if not 8 <= parameter_sets <= 128:
@@ -182,11 +198,29 @@ def robustness_payload(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("parameter_sets times runs_per_set cannot exceed 1,000,000")
     config = config_from_payload(scenario)
     started = time.perf_counter()
-    result = run_parameter_uncertainty(
-        config,
-        parameter_sets=parameter_sets,
-        runs_per_set=runs_per_set,
-    )
+    if method == "historical":
+        result = run_historically_calibrated_uncertainty(
+            config,
+            parameter_sets=parameter_sets,
+            runs_per_set=runs_per_set,
+        )
+    else:
+        result = run_parameter_uncertainty(
+            config,
+            parameter_sets=parameter_sets,
+            runs_per_set=runs_per_set,
+            method="judgment",
+            metadata={
+                "method_label": "User-centered judgment bands",
+                "initial_mortgage_rate_fixed": True,
+                "historical_parameters": [],
+                "judgment_parameters": [
+                    "stock_return", "home_appreciation", "rent_growth",
+                    "maintenance_rate", "property_tax_rate", "insurance_rate",
+                    "sale_cost_rate",
+                ],
+            },
+        )
 
     def records(frame: Any) -> list[dict[str, Any]]:
         return json.loads(frame.to_json(orient="records"))
@@ -196,6 +230,8 @@ def robustness_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "parameter_sets": result.parameter_sets,
         "runs_per_set": result.runs_per_set,
         "total_paths": result.parameter_sets * result.runs_per_set,
+        "method": result.method,
+        "calibration": result.metadata,
         "ranges": [asdict(item) for item in result.ranges],
         "summary": records(result.summary),
         "influence": records(result.influence),
@@ -203,7 +239,7 @@ def robustness_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 class SimulationHandler(BaseHTTPRequestHandler):
-    server_version = "BuyVsRentGUI/0.1"
+    server_version = "BuyVsRentGUI/0.3"
 
     def _json(self, data: dict[str, Any], status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(data, allow_nan=False).encode("utf-8")
@@ -266,7 +302,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    server = ThreadingHTTPServer((args.host, args.port), SimulationHandler)
+    server = SingleInstanceHTTPServer((args.host, args.port), SimulationHandler)
     url = f"http://{args.host}:{server.server_port}"
     print(f"Buy vs. Rent GUI: {url}")
     print("Press Ctrl+C to stop.")

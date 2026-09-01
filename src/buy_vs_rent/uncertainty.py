@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -42,6 +43,8 @@ class ParameterUncertaintyResult:
     summary: pd.DataFrame
     outcomes: pd.DataFrame
     influence: pd.DataFrame
+    method: str = "judgment"
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 def default_parameter_ranges(config: SimulationConfig) -> list[ParameterRange]:
@@ -190,8 +193,11 @@ def run_parameter_uncertainty(
     config: SimulationConfig | None = None,
     *,
     ranges: list[ParameterRange] | None = None,
+    parameter_draws: pd.DataFrame | None = None,
     parameter_sets: int = 64,
     runs_per_set: int = 5_000,
+    method: str = "judgment",
+    metadata: dict[str, Any] | None = None,
 ) -> ParameterUncertaintyResult:
     """Run nested Monte Carlo analysis over plausible long-run assumptions.
 
@@ -210,7 +216,19 @@ def run_parameter_uncertainty(
         raise ValueError("parameter_sets times runs_per_set cannot exceed 5,000,000")
 
     selected_ranges = list(ranges or default_parameter_ranges(base))
-    draws = sample_parameter_sets(selected_ranges, parameter_sets, base.seed + 70_001)
+    if parameter_draws is None:
+        draws = sample_parameter_sets(selected_ranges, parameter_sets, base.seed + 70_001)
+    else:
+        draws = parameter_draws.copy()
+        expected = {"parameter_set", *(item.key for item in selected_ranges)}
+        if len(draws) != parameter_sets:
+            raise ValueError("parameter_draws row count must equal parameter_sets")
+        if set(draws.columns) != expected:
+            raise ValueError("parameter_draws columns must match the selected parameter ranges")
+        if draws.isna().any().any() or not np.isfinite(
+            draws.drop(columns="parameter_set").to_numpy(dtype=float)
+        ).all():
+            raise ValueError("parameter_draws must contain only finite values")
     inner_seed = base.seed + 90_001
     outcome_rows: list[dict[str, float | int]] = []
 
@@ -282,4 +300,6 @@ def run_parameter_uncertainty(
         summary=pd.DataFrame(summary_rows),
         outcomes=outcomes,
         influence=influence.reset_index(drop=True),
+        method=method,
+        metadata=dict(metadata or {}),
     )

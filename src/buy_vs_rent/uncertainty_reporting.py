@@ -45,6 +45,10 @@ def save_parameter_uncertainty(
     (destination / "parameter_ranges.json").write_text(
         json.dumps(ranges, indent=2) + "\n", encoding="utf-8"
     )
+    (destination / "calibration_metadata.json").write_text(
+        json.dumps({"method": result.method, **result.metadata}, indent=2) + "\n",
+        encoding="utf-8",
+    )
     _plot_probability_ranges(result, destination / "robustness_probability_ranges.png")
     _plot_influence(result, destination / "parameter_influence.png")
     report_path = destination / "ROBUSTNESS_REPORT.md"
@@ -94,13 +98,24 @@ def _plot_influence(result: ParameterUncertaintyResult, path: Path) -> None:
 
 
 def _report_markdown(result: ParameterUncertaintyResult) -> str:
+    if result.method == "historical":
+        method_description = (
+            f"Uncertainty in stocks, Boston homes, Boston rents, and property taxes is "
+            f"calibrated from historical blocks through {result.metadata['data_end_year']} and "
+            "centered on the configured scenario. Maintenance, insurance, and selling costs "
+            "retain judgment bands."
+        )
+    else:
+        method_description = (
+            "Parameter ranges are triangular judgment bands, with the configured scenario "
+            "as the most likely value."
+        )
     lines = [
         "# Assumption Robustness Report",
         "",
         (
             f"This analysis uses {result.parameter_sets:,} stratified parameter sets and "
-            f"{result.runs_per_set:,} economic paths per set. Parameter ranges are triangular, "
-            "with the configured scenario as the most likely value."
+            f"{result.runs_per_set:,} economic paths per set. {method_description}"
         ),
         "",
         "## Results",
@@ -138,8 +153,9 @@ def _report_markdown(result: ParameterUncertaintyResult) -> str:
             "",
             "The integrated probability averages over the assumed triangular parameter distributions. "
             "The robust buy share is the fraction of parameter sets in which buying wins more than half "
-            "of economic paths. Neither is a guarantee: the parameter ranges are transparent judgment "
-            "calls and should be replaced with property-specific evidence when available.",
+            "of economic paths. Neither is a guarantee. Historical indexes do not represent a specific "
+            "property, and the remaining judgment bands should be replaced with property-specific "
+            "evidence when available.",
             "",
         ]
     )
