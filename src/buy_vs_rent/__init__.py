@@ -16,4 +16,4 @@ __all__ = [
     "run_simulation",
     "run_sweat_equity_analysis",
 ]
-__version__ = "0.4.0"
+__version__ = "0.5.0"

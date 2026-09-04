@@ -1,7 +1,8 @@
-"""Counterfactual and break-even analysis for a DIY sweat-equity project."""
+"""Counterfactual and required-uplift analysis for a DIY remodeling project."""
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass
 
@@ -21,29 +22,9 @@ class SweatEquityAnalysis:
     runs: int
     summary: pd.DataFrame
     curve: pd.DataFrame
-    financial_break_even_value: float | None
-    economic_break_even_value: float | None
+    financial_required_uplift: float | None
+    economic_required_uplift: float | None
     tested_max_value: float
-
-
-def _break_even(frame: pd.DataFrame, column: str) -> float | None:
-    """Linearly interpolate the first tested uplift reaching a 50% buy probability."""
-
-    ordered = frame.sort_values("value_added").reset_index(drop=True)
-    probabilities = ordered[column].to_numpy(dtype=float)
-    values = ordered["value_added"].to_numpy(dtype=float)
-    crossing = np.flatnonzero(probabilities >= 0.5)
-    if not len(crossing):
-        return None
-    index = int(crossing[0])
-    if index == 0:
-        return float(values[0])
-    lower_probability, upper_probability = probabilities[index - 1 : index + 1]
-    lower_value, upper_value = values[index - 1 : index + 1]
-    if upper_probability <= lower_probability:
-        return float(upper_value)
-    weight = (0.5 - lower_probability) / (upper_probability - lower_probability)
-    return float(lower_value + weight * (upper_value - lower_value))
 
 
 def _analysis_config(config: SimulationConfig, horizon: int, runs: int) -> SimulationConfig:
@@ -53,6 +34,33 @@ def _analysis_config(config: SimulationConfig, horizon: int, runs: int) -> Simul
     scenario.horizons = [horizon]
     scenario.validate()
     return scenario
+
+
+def _solve_threshold(
+    evaluate: Callable[[float], dict[str, float]],
+    column: str,
+    *,
+    initial_upper: float,
+    maximum: float,
+    tolerance: float = 500.0,
+) -> float | None:
+    """Bracket and bisect the value needed to reach a 50% buying probability."""
+
+    if evaluate(0.0)[column] >= 0.5:
+        return 0.0
+    lower, upper = 0.0, initial_upper
+    while evaluate(upper)[column] < 0.5 and upper < maximum:
+        lower = upper
+        upper = min(upper * 2.0, maximum)
+    if evaluate(upper)[column] < 0.5:
+        return None
+    while upper - lower > tolerance:
+        midpoint = (lower + upper) / 2.0
+        if evaluate(midpoint)[column] >= 0.5:
+            upper = midpoint
+        else:
+            lower = midpoint
+    return float(np.ceil(upper / 1_000.0) * 1_000.0)
 
 
 def run_sweat_equity_analysis(
@@ -66,8 +74,6 @@ def run_sweat_equity_analysis(
 
     config.validate()
     sweat = config.sweat_equity
-    if not sweat.enabled:
-        raise ValueError("Enable sweat equity before running its analysis")
     selected_horizon = int(horizon or max(config.horizons))
     if not sweat.completion_year <= selected_horizon <= config.years:
         raise ValueError("analysis horizon must be after project completion and within the simulation")
@@ -77,7 +83,9 @@ def run_sweat_equity_analysis(
         raise ValueError("curve_points must be between 5 and 21")
 
     analysis_runs = min(runs, config.runs)
-    configured = _analysis_config(config, selected_horizon, analysis_runs)
+    configured = deepcopy(config)
+    configured.sweat_equity.enabled = True
+    configured = _analysis_config(configured, selected_horizon, analysis_runs)
     without_project = deepcopy(configured)
     without_project.sweat_equity.enabled = False
     base_result = run_simulation(without_project)
@@ -125,39 +133,63 @@ def run_sweat_equity_analysis(
         ]
     )
 
-    tested_max = max(
-        config.housing.purchase_price * 0.50,
-        sweat.value_added_high * 1.25,
+    evaluated: dict[float, dict[str, float]] = {}
+
+    def evaluate(value: float) -> dict[str, float]:
+        key = float(value)
+        if key in evaluated:
+            return evaluated[key]
+        point = deepcopy(configured)
+        point.sweat_equity.value_added_low = key
+        point.sweat_equity.value_added_expected = key
+        point.sweat_equity.value_added_high = key
+        result = run_simulation(point)
+        difference = result.net_worth_differences[selected_horizon]
+        evaluated[key] = {
+            "value_added": key,
+            "financial_buy_probability": float(np.mean(difference > 0.0)),
+            "economic_buy_probability": float(np.mean(difference - time_cost > 0.0)),
+            "median_financial_difference": float(np.median(difference)),
+            "median_economic_difference": float(np.median(difference) - time_cost),
+        }
+        return evaluated[key]
+
+    initial_upper = max(
+        config.housing.purchase_price * 0.10,
         sweat.cash_cost * 2.0,
         100_000.0,
     )
-    raw_values = np.linspace(0.0, tested_max, curve_points)
+    maximum = max(config.housing.purchase_price * 4.0, initial_upper)
+    financial_threshold = _solve_threshold(
+        evaluate,
+        "financial_buy_probability",
+        initial_upper=initial_upper,
+        maximum=maximum,
+    )
+    economic_threshold = _solve_threshold(
+        evaluate,
+        "economic_buy_probability",
+        initial_upper=initial_upper,
+        maximum=maximum,
+    )
+    finite_thresholds = [
+        value for value in (financial_threshold, economic_threshold) if value is not None
+    ]
+    if finite_thresholds:
+        curve_max = max(initial_upper, max(finite_thresholds) * 1.35)
+    else:
+        curve_max = maximum
+    curve_max = float(np.ceil(curve_max / 5_000.0) * 5_000.0)
+    raw_values = np.linspace(0.0, curve_max, curve_points)
     values = np.unique(np.round(raw_values / 5_000.0) * 5_000.0)
-    curve_rows: list[dict[str, float]] = []
-    for value in values:
-        point = deepcopy(configured)
-        point.sweat_equity.value_added_low = float(value)
-        point.sweat_equity.value_added_expected = float(value)
-        point.sweat_equity.value_added_high = float(value)
-        result = run_simulation(point)
-        difference = result.net_worth_differences[selected_horizon]
-        curve_rows.append(
-            {
-                "value_added": float(value),
-                "financial_buy_probability": float(np.mean(difference > 0.0)),
-                "economic_buy_probability": float(np.mean(difference - time_cost > 0.0)),
-                "median_financial_difference": float(np.median(difference)),
-                "median_economic_difference": float(np.median(difference) - time_cost),
-            }
-        )
-    curve = pd.DataFrame(curve_rows)
+    curve = pd.DataFrame([evaluate(float(value)) for value in values])
     return SweatEquityAnalysis(
         config=deepcopy(config),
         horizon=selected_horizon,
         runs=analysis_runs,
         summary=summary,
         curve=curve,
-        financial_break_even_value=_break_even(curve, "financial_buy_probability"),
-        economic_break_even_value=_break_even(curve, "economic_buy_probability"),
-        tested_max_value=float(values.max()),
+        financial_required_uplift=financial_threshold,
+        economic_required_uplift=economic_threshold,
+        tested_max_value=maximum,
     )

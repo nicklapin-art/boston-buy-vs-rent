@@ -133,3 +133,26 @@ def test_sweat_equity_analysis_curve_is_monotonic():
     result = run_sweat_equity_analysis(config, runs=1_000, curve_points=5)
     assert result.curve.financial_buy_probability.is_monotonic_increasing
     assert result.summary.loc[0, "median_incremental_financial_value"] > 0
+
+
+def test_required_uplift_does_not_depend_on_optional_value_estimate():
+    low_estimate = deterministic_sweat_config()
+    low_estimate.sweat_equity.enabled = False
+    low_estimate.sweat_equity.cash_cost = 25_000
+    low_estimate.sweat_equity.value_added_low = 0
+    low_estimate.sweat_equity.value_added_expected = 10_000
+    low_estimate.sweat_equity.value_added_high = 20_000
+    high_estimate = deepcopy(low_estimate)
+    high_estimate.sweat_equity.value_added_low = 100_000
+    high_estimate.sweat_equity.value_added_expected = 150_000
+    high_estimate.sweat_equity.value_added_high = 200_000
+
+    first = run_sweat_equity_analysis(low_estimate, runs=1_000, curve_points=5)
+    second = run_sweat_equity_analysis(high_estimate, runs=1_000, curve_points=5)
+
+    assert first.financial_required_uplift == second.financial_required_uplift
+    assert first.economic_required_uplift == second.economic_required_uplift
+    assert (
+        first.summary.loc[0, "median_value_added_at_completion"]
+        < second.summary.loc[0, "median_value_added_at_completion"]
+    )

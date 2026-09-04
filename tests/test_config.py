@@ -82,7 +82,7 @@ def test_sweat_equity_browser_payload():
                 "years": 5,
                 "seed": 3,
                 "sweat_equity": {
-                    "enabled": True,
+                    "enabled": False,
                     "completion_year": 2,
                     "cash_cost": 20_000,
                     "labor_hours": 500,
@@ -100,3 +100,5 @@ def test_sweat_equity_browser_payload():
     assert payload["runs"] == 1_000
     assert len(payload["curve"]) == 5
     assert payload["summary"]["time_cost"] == 20_000
+    assert "financial_required_uplift" in payload
+    assert "economic_required_uplift" in payload

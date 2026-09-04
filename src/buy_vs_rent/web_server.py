@@ -175,7 +175,7 @@ def run_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def sweat_equity_payload(payload: dict[str, Any]) -> dict[str, Any]:
-    """Compare the configured DIY project with no project and map its break-even."""
+    """Calculate required remodeling uplift and compare the optional estimate."""
 
     if not isinstance(payload, dict):
         raise ValueError("Request must be a JSON object")
@@ -195,8 +195,8 @@ def sweat_equity_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "elapsed_seconds": round(time.perf_counter() - started, 3),
         "runs": result.runs,
         "horizon_years": result.horizon,
-        "financial_break_even_value": result.financial_break_even_value,
-        "economic_break_even_value": result.economic_break_even_value,
+        "financial_required_uplift": result.financial_required_uplift,
+        "economic_required_uplift": result.economic_required_uplift,
         "tested_max_value": result.tested_max_value,
         "summary": result.summary.to_dict(orient="records")[0],
         "curve": result.curve.to_dict(orient="records"),
@@ -294,7 +294,7 @@ def robustness_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 class SimulationHandler(BaseHTTPRequestHandler):
-    server_version = "BuyVsRentGUI/0.4"
+    server_version = "BuyVsRentGUI/0.5"
 
     def _json(self, data: dict[str, Any], status: HTTPStatus = HTTPStatus.OK) -> None:
         body = json.dumps(data, allow_nan=False).encode("utf-8")
