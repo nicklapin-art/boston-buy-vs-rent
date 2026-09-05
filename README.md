@@ -1,5 +1,22 @@
 # Boston Buy vs. Rent Monte Carlo
 
+This repository also includes an independent **real-estate flip simulator** for buy–rebuild–sell projects. It uses monthly cash flows and its own normal/slowdown/crash Markov model; it does not reuse the buy-versus-rent accounting.
+
+## Real-estate flip GUI
+
+On Windows, double-click `Launch Flip Simulator.cmd`. The flip interface opens at `http://127.0.0.1:8765`, so it can run alongside the buy-versus-rent GUI on port 8000.
+
+The flip model includes:
+
+- Purchase price, as-is value, down payment, closing costs, interest-only acquisition financing, and lender points.
+- Correlated construction cost overruns and schedule delays.
+- Monthly tax, insurance, utilities, financing, renovation, and other carrying cash flows.
+- An after-repair value stated in today's market, property-specific appraisal uncertainty, market appreciation, selling costs, and marketing time.
+- Monthly normal, slowdown, and crash regimes with persistent transitions, different price behavior, volatility, and forced-sale discounts.
+- Pre-tax and simplified after-tax profit, annualized equity IRR, probability of profit, probability of clearing a chosen hurdle rate, cash required, holding period, break-even sale price, distribution percentiles, and exit-regime results.
+
+The tax input is deliberately a simplified rate applied to positive project profit. It is useful for scenario analysis but is not a substitute for property-specific tax advice.
+
 A configurable, vectorized Python model for comparing a Boston-area home purchase with renting and investing the difference. The baseline is a **$1.2M purchase, $250k down, 6.66% 30-year mortgage, and $4,500 monthly rent** over 100,000 simulated paths.
 
 This is a decision-support model, not financial, tax, lending, or real-estate advice. Its outputs are only as reliable as its assumptions.

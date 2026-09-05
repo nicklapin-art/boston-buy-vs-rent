@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Real-estate flip simulator</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #151814;
+      --panel: #1d211c;
+      --panel-2: #242a23;
+      --text: #f2eee4;
+      --muted: #b8bcae;
+      --border: #3b4339;
+      --green: #9ed6ad;
+      --green-strong: #5ebd7d;
+      --orange: #edb277;
+      --red: #ee8a82;
+      --blue: #8dc7d4;
+      --shadow: 0 16px 46px rgba(0, 0, 0, .24);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    button, input { font: inherit; }
+    .shell { max-width: 1500px; margin: 0 auto; padding: 28px; }
+    header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 24px; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { font-family: Georgia, serif; font-size: clamp(2rem, 4vw, 3.6rem); line-height: .98; margin-bottom: 12px; font-weight: 500; }
+    h2 { font-family: Georgia, serif; font-size: 1.45rem; font-weight: 500; margin-bottom: 8px; }
+    h3 { font-size: .98rem; font-weight: 650; margin-bottom: 12px; }
+    .lede { color: var(--muted); max-width: 780px; line-height: 1.55; margin-bottom: 0; }
+    .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    button { border: 1px solid var(--border); border-radius: 12px; padding: 11px 16px; background: transparent; color: var(--text); cursor: pointer; }
+    button.primary { background: var(--text); color: var(--bg); border-color: var(--text); font-weight: 700; }
+    button:hover { border-color: var(--muted); }
+    button:disabled { opacity: .55; cursor: wait; }
+    .layout { display: grid; grid-template-columns: minmax(280px, 410px) minmax(0, 1fr); gap: 22px; align-items: start; }
+    .controls { position: sticky; top: 18px; max-height: calc(100vh - 36px); overflow: auto; padding-right: 4px; }
+    details { border-top: 1px solid var(--border); padding: 17px 0 13px; }
+    details:first-child { border-top: 0; padding-top: 0; }
+    summary { cursor: pointer; font-weight: 700; margin-bottom: 14px; }
+    .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; }
+    .field.wide { grid-column: 1 / -1; }
+    label { display: block; color: var(--muted); font-size: .82rem; margin-bottom: 6px; line-height: 1.25; }
+    input { width: 100%; color: var(--text); background: var(--panel-2); border: 1px solid var(--border); border-radius: 9px; padding: 10px 11px; }
+    input:focus { outline: 2px solid var(--blue); outline-offset: 1px; }
+    .control-note { color: var(--muted); font-size: .79rem; line-height: 1.45; margin: 9px 0 0; }
+    .results { min-width: 0; }
+    .status { min-height: 24px; color: var(--muted); margin: 0 0 14px; }
+    .status.error { color: var(--red); }
+    .verdict { background: #25392e; border-left: 5px solid var(--green-strong); padding: 17px 19px; margin-bottom: 16px; font-size: 1.08rem; line-height: 1.45; }
+    .verdict.warn { background: #3a2d21; border-left-color: var(--orange); }
+    .metrics { display: grid; grid-template-columns: repeat(4, minmax(140px, 1fr)); gap: 12px; margin-bottom: 22px; }
+    .metric { border: 1px solid var(--border); border-radius: 13px; padding: 15px; background: var(--panel); min-width: 0; }
+    .metric span { color: var(--muted); font-size: .79rem; display: block; margin-bottom: 7px; }
+    .metric strong { display: block; font-size: clamp(1.15rem, 2vw, 1.65rem); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .metric small { color: var(--muted); display: block; margin-top: 5px; line-height: 1.35; }
+    .panel { border-top: 1px solid var(--border); padding-top: 20px; margin-top: 21px; }
+    .panel-head { display: flex; justify-content: space-between; gap: 18px; align-items: baseline; }
+    .panel-head p { color: var(--muted); font-size: .84rem; margin-bottom: 8px; text-align: right; }
+    .chart { width: 100%; min-height: 280px; }
+    svg { display: block; width: 100%; height: auto; overflow: visible; }
+    .axis { fill: var(--muted); font-size: 11px; }
+    .gridline { stroke: var(--border); stroke-width: 1; }
+    .zero { stroke: var(--text); stroke-width: 1.5; }
+    .bar { fill: var(--blue); opacity: .88; }
+    .bar.negative { fill: var(--red); }
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+    th, td { padding: 11px 9px; border-bottom: 1px solid var(--border); text-align: right; white-space: nowrap; }
+    th:first-child, td:first-child { text-align: left; }
+    th { color: var(--muted); font-weight: 600; }
+    .cost-row { display: grid; grid-template-columns: 132px minmax(80px, 1fr) 100px; gap: 12px; align-items: center; margin: 11px 0; font-size: .84rem; }
+    .track { height: 9px; background: var(--panel-2); overflow: hidden; border-radius: 10px; }
+    .fill { height: 100%; background: var(--green-strong); }
+    .cost-value { text-align: right; font-variant-numeric: tabular-nums; }
+    .fineprint { color: var(--muted); font-size: .78rem; line-height: 1.5; margin-top: 18px; }
+    [hidden] { display: none !important; }
+    @media (max-width: 1050px) {
+      .layout { grid-template-columns: 1fr; }
+      .controls { position: static; max-height: none; }
+      .metrics { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+    }
+    @media (max-width: 620px) {
+      .shell { padding: 19px 15px; }
+      header { align-items: flex-start; flex-direction: column; }
+      .actions, .actions button { width: 100%; }
+      .field-grid { grid-template-columns: 1fr; }
+      .field.wide { grid-column: auto; }
+      .metrics { grid-template-columns: 1fr 1fr; }
+      .panel-head { display: block; }
+      .panel-head p { text-align: left; }
+      .cost-row { grid-template-columns: 105px minmax(60px, 1fr) 82px; gap: 8px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div>
+        <h1>Flip simulator</h1>
+        <p class="lede">Test a buy–rebuild–sell project with monthly cash flows, correlated construction risk, uncertain resale value, and normal, slowdown, and crash market regimes.</p>
+      </div>
+      <div class="actions">
+        <button id="reset-button" type="button">Reset assumptions</button>
+        <button class="primary" id="run-button" type="button">Run simulation</button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <aside class="controls" aria-label="Simulation assumptions">
+        <details open>
+          <summary>Purchase</summary>
+          <div class="field-grid">
+            <div class="field"><label for="purchase-price">Purchase price ($)</label><input id="purchase-price" type="number" min="1" step="10000"></div>
+            <div class="field"><label for="as-is-value">As-is market value ($)</label><input id="as-is-value" type="number" min="1" step="10000"></div>
+            <div class="field"><label for="down-payment">Down payment ($)</label><input id="down-payment" type="number" min="0" step="10000"></div>
+            <div class="field"><label for="purchase-closing">Purchase closing costs (%)</label><input id="purchase-closing" type="number" min="0" step="0.1"></div>
+          </div>
+        </details>
+
+        <details open>
+          <summary>Renovation</summary>
+          <div class="field-grid">
+            <div class="field"><label for="rehab-budget">Planned budget ($)</label><input id="rehab-budget" type="number" min="0" step="5000"></div>
+            <div class="field"><label for="expected-overrun">Expected overrun (%)</label><input id="expected-overrun" type="number" min="0" step="1"></div>
+            <div class="field"><label for="cost-vol">Cost uncertainty (%)</label><input id="cost-vol" type="number" min="0" step="1"></div>
+            <div class="field"><label for="duration">Build duration (months)</label><input id="duration" type="number" min="1" step="1"></div>
+            <div class="field"><label for="duration-vol">Schedule uncertainty (months)</label><input id="duration-vol" type="number" min="0" step="0.5"></div>
+            <div class="field"><label for="cost-duration-corr">Cost/delay correlation</label><input id="cost-duration-corr" type="number" min="-0.99" max="0.99" step="0.05"></div>
+          </div>
+        </details>
+
+        <details open>
+          <summary>Resale</summary>
+          <div class="field-grid">
+            <div class="field wide"><label for="arv">After-repair value in today's market ($)</label><input id="arv" type="number" min="1" step="10000"></div>
+            <div class="field"><label for="arv-vol">Property-specific ARV uncertainty (%)</label><input id="arv-vol" type="number" min="0" step="1"></div>
+            <div class="field"><label for="marketing-months">Expected marketing months</label><input id="marketing-months" type="number" min="0" step="0.5"></div>
+            <div class="field"><label for="selling-cost">Selling costs (%)</label><input id="selling-cost" type="number" min="0" step="0.1"></div>
+            <div class="field"><label for="tax-rate">Estimated tax on profit (%)</label><input id="tax-rate" type="number" min="0" step="1"></div>
+            <div class="field"><label for="hurdle">Required annual return (%)</label><input id="hurdle" type="number" min="0" step="1"></div>
+            <div class="field"><label for="max-hold">Maximum simulated hold (months)</label><input id="max-hold" type="number" min="1" max="60" step="1"></div>
+          </div>
+        </details>
+
+        <details>
+          <summary>Financing and carrying costs</summary>
+          <div class="field-grid">
+            <div class="field"><label for="interest-rate">Interest-only loan rate (%)</label><input id="interest-rate" type="number" min="0" step="0.1"></div>
+            <div class="field"><label for="lender-points">Lender points (%)</label><input id="lender-points" type="number" min="0" step="0.1"></div>
+            <div class="field"><label for="property-tax">Annual property tax (%)</label><input id="property-tax" type="number" min="0" step="0.01"></div>
+            <div class="field"><label for="insurance">Annual insurance (%)</label><input id="insurance" type="number" min="0" step="0.01"></div>
+            <div class="field"><label for="utilities">Utilities/security per month ($)</label><input id="utilities" type="number" min="0" step="50"></div>
+            <div class="field"><label for="other-carry">Other carrying cost per month ($)</label><input id="other-carry" type="number" min="0" step="50"></div>
+          </div>
+        </details>
+
+        <details>
+          <summary>Market and run settings</summary>
+          <div class="field-grid">
+            <div class="field"><label for="home-return">Normal annual price growth (%)</label><input id="home-return" type="number" step="0.1"></div>
+            <div class="field"><label for="home-vol">Annual market volatility (%)</label><input id="home-vol" type="number" min="0" step="0.5"></div>
+            <div class="field"><label for="runs">Monte Carlo paths</label><input id="runs" type="number" min="1000" max="100000" step="1000"></div>
+            <div class="field"><label for="seed">Random seed</label><input id="seed" type="number" step="1"></div>
+          </div>
+          <p class="control-note">The monthly Markov chain uses normal, slowdown, and crash regimes. Slowdowns reduce annual price growth by 8 points and apply a 3% forced-sale discount; crashes reduce growth by 25 points and apply a 10% discount.</p>
+        </details>
+      </aside>
+
+      <section class="results" aria-live="polite">
+        <p class="status" id="status">Loading assumptions…</p>
+        <div id="result-content" hidden>
+          <div class="verdict" id="verdict"></div>
+          <div class="metrics">
+            <div class="metric"><span>Median after-tax profit</span><strong id="median-profit"></strong><small id="profit-range"></small></div>
+            <div class="metric"><span>Probability of profit</span><strong id="profit-prob"></strong><small>After the estimated tax setting</small></div>
+            <div class="metric"><span>Median annualized IRR</span><strong id="median-irr"></strong><small id="irr-range"></small></div>
+            <div class="metric"><span>Chance of clearing hurdle</span><strong id="hurdle-prob"></strong><small id="hurdle-label"></small></div>
+            <div class="metric"><span>Median sale price</span><strong id="sale-price"></strong><small id="value-created"></small></div>
+            <div class="metric"><span>Median break-even sale</span><strong id="break-even"></strong><small>Pre-tax, including financing</small></div>
+            <div class="metric"><span>Median cash required</span><strong id="cash-required"></strong><small id="cash-stress"></small></div>
+            <div class="metric"><span>Median holding period</span><strong id="hold-months"></strong><small id="hold-stress"></small></div>
+          </div>
+
+          <section class="panel">
+            <div class="panel-head"><h2>After-tax profit distribution</h2><p>The end bins include the outer 1% tails</p></div>
+            <div class="chart" id="profit-chart"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h2>Outcome percentiles</h2><p>Downside and upside across all simulated paths</p></div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Percentile</th><th>After-tax profit</th><th>Annualized IRR</th><th>Sale price</th><th>Cash required</th></tr></thead>
+              <tbody id="percentile-table"></tbody>
+            </table></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h2>Exit market regime</h2><p>Results grouped by the state when the property sells</p></div>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Exit state</th><th>Share of paths</th><th>Median profit</th><th>Probability of profit</th><th>Median sale price</th></tr></thead>
+              <tbody id="regime-table"></tbody>
+            </table></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head"><h2>Median project cost stack</h2><p>Purchase is shown for scale; financing excludes principal repayment</p></div>
+            <div id="cost-breakdown"></div>
+          </section>
+
+          <p class="fineprint">ARV is the finished property's value in today's market. The model moves it with the simulated local market until sale, then applies property-specific uncertainty and any regime exit discount. Taxes are a simplified percentage of positive project profit, not tax advice. Renovation labor, depreciation, entity structure, tax deductions, construction-loan draws, and personal-use value are not modeled.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const currency = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+    const percent = value => `${(value * 100).toFixed(1)}%`;
+    const number = id => {
+      const value = Number(document.getElementById(id).value);
+      if (!Number.isFinite(value)) throw new Error(`Please enter a valid value for ${document.querySelector(`label[for="${id}"]`).textContent}.`);
+      return value;
+    };
+    const pct = id => number(id) / 100;
+    let defaults = null;
+
+    async function jsonRequest(url, options = {}) {
+      const response = await fetch(url, options);
+      const contentType = response.headers.get('content-type') || '';
+      const text = await response.text();
+      if (!contentType.includes('application/json')) {
+        throw new Error(`The simulator server returned ${response.status} instead of JSON. Restart the Flip Simulator launcher and reload this page.`);
+      }
+      let data;
+      try { data = JSON.parse(text); }
+      catch { throw new Error('The simulator returned malformed data. Restart the server and try again.'); }
+      if (!response.ok) throw new Error(data.error || `Request failed with status ${response.status}.`);
+      return data;
+    }
+
+    function setValue(id, value) { document.getElementById(id).value = value; }
+    function applyDefaults(d) {
+      setValue('purchase-price', d.acquisition.purchase_price);
+      setValue('as-is-value', d.acquisition.as_is_market_value);
+      setValue('down-payment', d.acquisition.down_payment);
+      setValue('purchase-closing', d.acquisition.purchase_closing_cost_rate * 100);
+      setValue('property-tax', d.acquisition.annual_property_tax_rate * 100);
+      setValue('insurance', d.acquisition.annual_insurance_rate * 100);
+      setValue('utilities', d.acquisition.monthly_utilities);
+      setValue('other-carry', d.acquisition.monthly_other_carry);
+      setValue('rehab-budget', d.renovation.planned_budget);
+      setValue('expected-overrun', d.renovation.expected_cost_overrun_rate * 100);
+      setValue('cost-vol', d.renovation.cost_volatility * 100);
+      setValue('duration', d.renovation.duration_months);
+      setValue('duration-vol', d.renovation.duration_volatility_months);
+      setValue('cost-duration-corr', d.renovation.cost_duration_correlation);
+      setValue('interest-rate', d.financing.annual_interest_rate * 100);
+      setValue('lender-points', d.financing.lender_points_rate * 100);
+      setValue('arv', d.exit.after_repair_value);
+      setValue('arv-vol', d.exit.arv_uncertainty * 100);
+      setValue('marketing-months', d.exit.marketing_months);
+      setValue('selling-cost', d.exit.selling_cost_rate * 100);
+      setValue('tax-rate', d.exit.estimated_tax_rate * 100);
+      setValue('hurdle', d.exit.annual_hurdle_rate * 100);
+      setValue('max-hold', d.exit.max_holding_months);
+      setValue('home-return', d.market.annual_home_appreciation * 100);
+      setValue('home-vol', d.market.annual_home_volatility * 100);
+      setValue('runs', d.runs);
+      setValue('seed', d.seed);
+    }
+
+    function scenario() {
+      return {
+        runs: Math.trunc(number('runs')),
+        seed: Math.trunc(number('seed')),
+        acquisition: {
+          purchase_price: number('purchase-price'), as_is_market_value: number('as-is-value'),
+          down_payment: number('down-payment'), purchase_closing_cost_rate: pct('purchase-closing'),
+          annual_property_tax_rate: pct('property-tax'), annual_insurance_rate: pct('insurance'),
+          monthly_utilities: number('utilities'), monthly_other_carry: number('other-carry')
+        },
+        renovation: {
+          planned_budget: number('rehab-budget'), expected_cost_overrun_rate: pct('expected-overrun'),
+          cost_volatility: pct('cost-vol'), duration_months: number('duration'),
+          duration_volatility_months: number('duration-vol'), cost_duration_correlation: number('cost-duration-corr')
+        },
+        financing: { annual_interest_rate: pct('interest-rate'), lender_points_rate: pct('lender-points') },
+        exit: {
+          after_repair_value: number('arv'), arv_uncertainty: pct('arv-vol'),
+          marketing_months: number('marketing-months'), selling_cost_rate: pct('selling-cost'),
+          estimated_tax_rate: pct('tax-rate'), annual_hurdle_rate: pct('hurdle'),
+          max_holding_months: Math.trunc(number('max-hold'))
+        },
+        market: { annual_home_appreciation: pct('home-return'), annual_home_volatility: pct('home-vol') }
+      };
+    }
+
+    function renderHistogram(rows) {
+      const host = document.getElementById('profit-chart');
+      const width = Math.max(620, host.clientWidth || 760), height = 290;
+      const margin = { top: 16, right: 15, bottom: 50, left: 58 };
+      const plotW = width - margin.left - margin.right, plotH = height - margin.top - margin.bottom;
+      const minX = rows[0].low, maxX = rows[rows.length - 1].high;
+      const maxY = Math.max(...rows.map(row => row.count));
+      const x = value => margin.left + (value - minX) / (maxX - minX) * plotW;
+      const y = value => margin.top + plotH - value / maxY * plotH;
+      const barGap = Math.max(1, plotW / rows.length * .12);
+      const bars = rows.map(row => {
+        const left = x(row.low) + barGap / 2, right = x(row.high) - barGap / 2;
+        const negative = (row.low + row.high) / 2 < 0 ? ' negative' : '';
+        return `<rect class="bar${negative}" x="${left}" y="${y(row.count)}" width="${Math.max(1, right-left)}" height="${margin.top+plotH-y(row.count)}"><title>${currency.format(row.low)} to ${currency.format(row.high)}: ${row.count.toLocaleString()} paths</title></rect>`;
+      }).join('');
+      const ticks = Array.from({ length: 5 }, (_, i) => minX + (maxX-minX)*i/4);
+      const xTicks = ticks.map(v => `<text class="axis" x="${x(v)}" y="${height-22}" text-anchor="middle">${currency.format(v)}</text>`).join('');
+      const yTicks = Array.from({ length: 4 }, (_, i) => maxY*i/3).map(v => `<line class="gridline" x1="${margin.left}" x2="${width-margin.right}" y1="${y(v)}" y2="${y(v)}"/><text class="axis" x="${margin.left-8}" y="${y(v)+4}" text-anchor="end">${Math.round(v).toLocaleString()}</text>`).join('');
+      const zero = minX < 0 && maxX > 0 ? `<line class="zero" x1="${x(0)}" x2="${x(0)}" y1="${margin.top}" y2="${margin.top+plotH}"/>` : '';
+      host.innerHTML = `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Histogram of simulated after-tax project profit"><title>After-tax profit distribution</title>${yTicks}${zero}${bars}${xTicks}<text class="axis" x="${margin.left+plotW/2}" y="${height-3}" text-anchor="middle">After-tax project profit</text></svg>`;
+    }
+
+    function render(data) {
+      window.lastHistogram = data.histogram;
+      const s = data.summary;
+      const beats = s.probability_beats_hurdle >= .5;
+      const verdict = document.getElementById('verdict');
+      verdict.className = `verdict${beats ? '' : ' warn'}`;
+      verdict.textContent = `${percent(s.probability_beats_hurdle)} of paths clear your ${(data.hurdle_rate*100).toFixed(0)}% annual return requirement. Median after-tax profit is ${currency.format(s.median_after_tax_profit)} over a ${s.median_holding_months.toFixed(0)}-month hold.`;
+      document.getElementById('median-profit').textContent = currency.format(s.median_after_tax_profit);
+      document.getElementById('profit-range').textContent = `5th–95th: ${currency.format(s.p05_after_tax_profit)} to ${currency.format(s.p95_after_tax_profit)}`;
+      document.getElementById('profit-prob').textContent = percent(s.probability_of_profit);
+      document.getElementById('median-irr').textContent = percent(s.median_annualized_irr);
+      document.getElementById('irr-range').textContent = `5th–95th: ${percent(s.p05_annualized_irr)} to ${percent(s.p95_annualized_irr)}`;
+      document.getElementById('hurdle-prob').textContent = percent(s.probability_beats_hurdle);
+      document.getElementById('hurdle-label').textContent = `Required IRR: ${percent(data.hurdle_rate)}`;
+      document.getElementById('sale-price').textContent = currency.format(s.median_sale_price);
+      document.getElementById('value-created').textContent = `Median value over as-is: ${currency.format(s.median_renovation_value_created)}`;
+      document.getElementById('break-even').textContent = currency.format(s.median_break_even_sale_price);
+      document.getElementById('cash-required').textContent = currency.format(s.median_maximum_cash_required);
+      document.getElementById('cash-stress').textContent = `95th percentile: ${currency.format(s.p95_maximum_cash_required)}`;
+      document.getElementById('hold-months').textContent = `${s.median_holding_months.toFixed(0)} months`;
+      document.getElementById('hold-stress').textContent = `95th percentile: ${s.p95_holding_months.toFixed(0)} months`;
+
+      document.getElementById('percentile-table').innerHTML = data.percentiles.map(row => `<tr><td>${row.percentile}th</td><td>${currency.format(row.after_tax_profit)}</td><td>${percent(row.annualized_irr)}</td><td>${currency.format(row.sale_price)}</td><td>${currency.format(row.maximum_cash_required)}</td></tr>`).join('');
+      document.getElementById('regime-table').innerHTML = data.regimes.map(row => `<tr><td>${row.regime[0].toUpperCase()+row.regime.slice(1)}</td><td>${percent(row.path_share)}</td><td>${currency.format(row.median_after_tax_profit)}</td><td>${percent(row.probability_of_profit)}</td><td>${currency.format(row.median_sale_price)}</td></tr>`).join('');
+      const maxCost = Math.max(...data.cost_breakdown.map(row => row.median));
+      document.getElementById('cost-breakdown').innerHTML = data.cost_breakdown.map(row => `<div class="cost-row"><span>${row.category}</span><div class="track"><div class="fill" style="width:${row.median/maxCost*100}%"></div></div><span class="cost-value">${currency.format(row.median)}</span></div>`).join('');
+      renderHistogram(data.histogram);
+      document.getElementById('result-content').hidden = false;
+    }
+
+    async function runSimulation() {
+      const button = document.getElementById('run-button');
+      const status = document.getElementById('status');
+      button.disabled = true;
+      button.textContent = 'Running…';
+      status.className = 'status';
+      status.textContent = 'Simulating monthly construction, market, financing, and exit paths…';
+      try {
+        const data = await jsonRequest('/api/simulate', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(scenario())
+        });
+        render(data);
+        status.textContent = `Completed ${data.runs.toLocaleString()} paths in ${data.elapsed_seconds.toFixed(2)} seconds.`;
+      } catch (error) {
+        status.className = 'status error';
+        status.textContent = error.message;
+      } finally {
+        button.disabled = false;
+        button.textContent = 'Run simulation';
+      }
+    }
+
+    async function initialize() {
+      try {
+        defaults = await jsonRequest('/api/defaults');
+        applyDefaults(defaults);
+        await runSimulation();
+      } catch (error) {
+        const status = document.getElementById('status');
+        status.className = 'status error';
+        status.textContent = error.message;
+      }
+    }
+
+    document.getElementById('run-button').addEventListener('click', runSimulation);
+    document.getElementById('reset-button').addEventListener('click', () => { if (defaults) { applyDefaults(defaults); runSimulation(); } });
+    window.addEventListener('resize', () => {
+      if (!document.getElementById('result-content').hidden && window.lastHistogram) renderHistogram(window.lastHistogram);
+    });
+    initialize();
+  </script>
+</body>
+</html>
